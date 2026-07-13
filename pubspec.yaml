@@ -1,0 +1,36 @@
+name: chocolate_eater_dinosaur
+description: A fun drag-to-connect game where a dinosaur eats chocolates.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.2.2
+  confetti: ^0.7.0
+  audioplayers: ^6.0.0      # uncomment when you add sounds
+  # sensors_plus: ^6.0.0    # optional for shake gesture
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/       # place your dino, chocolate, hat images here
+    - assets/sounds/       # place bg.mp3, eat.mp3, win.mp3, footstep.mp3
+    - assets/images/logo.png
+    - assets/dino/idle.png
+    - assets/dino/walk.png
+    - assets/dino/eat.png
+  fonts:
+    - family: GameFont
+      fonts:
+        - asset: assets/fonts/FredokaOne-Regular.ttf
+    
