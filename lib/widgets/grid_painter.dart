@@ -110,6 +110,11 @@ class GridPainter extends CustomPainter {
     return _obstacleEmojis[name] ?? _obstacleEmojis['jungle']!;
   }
 
+  // ---- Helper to strip variation selectors (U+FE00–U+FE0F) ----
+  String _normalizeEmoji(String emoji) {
+    return emoji.replaceAll(RegExp(r'[\uFE00-\uFE0F]'), '');
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     // ---- 1. Draw cells with checkerboard shade ----
@@ -160,7 +165,7 @@ class GridPainter extends CustomPainter {
     // ---- 4. Themed obstacles ----
     _drawThemedObstacles(canvas);
 
-    // ---- 5. Collectibles with image/emoji (now larger) ----
+    // ---- 5. Collectibles (now rendered with high quality) ----
     _drawCollectibles(canvas);
 
     // ---- 6. Temporary effects ----
@@ -271,7 +276,7 @@ class GridPainter extends CustomPainter {
   }
 
   void _drawCollectibles(Canvas canvas) {
-    final emoji = sweetEmoji ?? world.emoji;
+    final emoji = _normalizeEmoji(sweetEmoji ?? world.emoji);
     final eatenThisDrag = currentDragPath.map((p) => '${p.x},${p.y}').toSet();
 
     for (int r = 0; r < gridSize; r++) {
@@ -300,21 +305,25 @@ class GridPainter extends CustomPainter {
             shadowPaint,
           );
 
-          // ---- Draw collectible – now 70% of cell ----
+          // ---- Draw collectible with HIGH QUALITY ----
           if (chocolateImage != null) {
-            final imageSize = cellSize * 0.7 * scale; // increased from 0.55
+            final imageSize = cellSize * 0.75 * scale; // slightly larger
             canvas.save();
             canvas.translate(pos.dx, pos.dy);
             canvas.scale(scale);
+            // ---- Use high-quality filtering ----
+            final paint = Paint()
+              ..isAntiAlias = true
+              ..filterQuality = FilterQuality.high;
             canvas.drawImageRect(
               chocolateImage!,
               Rect.fromLTWH(0, 0, chocolateImage!.width.toDouble(), chocolateImage!.height.toDouble()),
               Rect.fromLTWH(-imageSize / 2, -imageSize / 2, imageSize, imageSize),
-              Paint(),
+              paint,
             );
             canvas.restore();
           } else {
-            // Emoji fallback – larger font size
+            // Emoji fallback
             _drawEmoji(canvas, pos, emoji, cellSize * 0.7, scale: scale);
           }
 
@@ -358,17 +367,19 @@ class GridPainter extends CustomPainter {
       final parts = entry.key.split(',').map(int.parse).toList();
       final r = parts[0], c = parts[1];
       final center = Offset(c * cellSize + cellSize / 2, r * cellSize + cellSize / 2);
-      _drawEmoji(canvas, center, entry.value, cellSize * 0.8);
+      final emoji = _normalizeEmoji(entry.value);
+      _drawEmoji(canvas, center, emoji, cellSize * 0.8);
     }
   }
 
   void _drawEmoji(Canvas canvas, Offset pos, String emoji, double size, {double scale = 1.0}) {
-    final key = '$emoji:$size';
+    final normalized = _normalizeEmoji(emoji);
+    final key = '$normalized:$size';
     TextPainter? painter = _emojiPainters[key];
     if (painter == null) {
       final style = TextStyle(fontSize: size, fontWeight: FontWeight.bold);
       painter = TextPainter(
-        text: TextSpan(text: emoji, style: style),
+        text: TextSpan(text: normalized, style: style),
         textDirection: TextDirection.ltr,
       );
       painter.layout();
