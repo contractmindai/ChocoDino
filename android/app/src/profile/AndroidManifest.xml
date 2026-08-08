@@ -3,5 +3,14 @@
          the Flutter tool needs it to communicate with the running application
          to allow setting breakpoints, to provide hot reload, etc.
     -->
-    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Camera -->
+<uses-permission android:name="android.permission.CAMERA" />
+
+<!-- For Android 12 and below: write to external storage -->
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+
+<!-- For Android 13+ (API 33): read media images (required by gal) -->
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 </manifest>

@@ -19,33 +19,25 @@ class DifficultyConfig {
   });
 }
 
-/// ⚡ EXTREME DIFFICULTY – more obstacles, faster ramp, but still capped at 40% of board.
-/// Guaranteed solvable via BFS validation in the generator.
+/// Continuous difficulty – no resets, everything grows steadily.
 DifficultyConfig difficultyForLevel(int level) {
   final lvl = level.clamp(1, 200);
 
-  // Grid size: 5 at level 1, +1 every 12 levels, capped at 10.
-  final gridSize = (5 + (lvl - 1) ~/ 12).clamp(5, 10);
+  // ---- Grid size: 5 at level 1, +1 every 10 levels, capped at 10 ----
+  final gridSize = (5 + (lvl - 1) ~/ 10).clamp(5, 10);
 
-  // Chocolate count: start at 5, +1 every 3 levels.
-  int chocolateCount = 5 + (lvl - 1) ~/ 3;
+  // ---- Chocolate count: start at 4, +1 every 4 levels ----
+  int chocolateCount = 4 + (lvl - 1) ~/ 4;
 
-  // ---- Obstacle counts – much more aggressive ----
-  // Trees: start from level 1, grow fast.
-  final rawTreeCount = 1 + (lvl ~/ 2); // was lvl~/3
+  // ---- Obstacle counts – continuous, no resets, start earlier and ramp faster ----
+  final rawTreeCount = (lvl * 2) ~/ 5;
+  final rawMineCount = lvl < 5 ? 0 : (lvl - 4) ~/ 2 + 1;
+  final rawEnemyCount = lvl < 7 ? 0 : (lvl - 6) ~/ 2 + 1;
+  final rawHazardCount = lvl < 10 ? 0 : (lvl - 9) ~/ 2 + 1;
 
-  // Mines: start from level 4.
-  final rawMineCount = lvl < 4 ? 0 : 1 + ((lvl - 4) ~/ 2); // was lvl~/3
-
-  // Enemies: start from level 6.
-  final rawEnemyCount = lvl < 6 ? 0 : 1 + ((lvl - 6) ~/ 2); // was lvl~/3
-
-  // Hazards: start from level 8.
-  final rawHazardCount = lvl < 8 ? 0 : 1 + ((lvl - 8) ~/ 2); // was lvl~/3
-
-  // ---- Cap obstacles to board capacity (max 40% obstacles) ----
+  // ---- Cap obstacles to board capacity (max 45% obstacles, was 40%) ----
   final area = gridSize * gridSize;
-  final maxObstacles = (area * 0.4).toInt();
+  final maxObstacles = (area * 0.45).toInt();
   int treeCount = rawTreeCount;
   int mineCount = rawMineCount;
   int enemyCount = rawEnemyCount;
@@ -59,9 +51,11 @@ DifficultyConfig difficultyForLevel(int level) {
     hazardCount = (rawHazardCount * ratio).toInt();
   }
 
-  // Ensure chocolates fit (max 35% of board)
+  // Ensure chocolates fit (max 25% of board, was 35% — a lower density
+  // cap leaves more open space for hidden enemies and generally results
+  // in cleaner, more reachable boards, especially at higher levels)
   chocolateCount = chocolateCount.clamp(3, (gridSize * gridSize) ~/ 2);
-  final maxChoc = (area * 0.35).toInt();
+  final maxChoc = (area * 0.25).toInt();
   final finalChocolate = chocolateCount.clamp(3, maxChoc);
 
   return DifficultyConfig(

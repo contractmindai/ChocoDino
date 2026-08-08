@@ -11,7 +11,10 @@ class LevelConfig {
   final Set<String> hazards;
   final List<List<int>> dangerMap;
   final Set<String> path;
-  final SweetWorld world; // new – theme for the level
+  final SweetWorld world;
+  final Set<String> hiddenEnemies;
+  final Set<String> detours;
+  final Set<String> bonusItems;
 
   LevelConfig(
     this.levelNum,
@@ -24,6 +27,9 @@ class LevelConfig {
     required this.dangerMap,
     required this.path,
     required this.world,
+    this.hiddenEnemies = const {},
+    this.detours = const {},
+    this.bonusItems = const {},
   });
 
   int get levelNumber => levelNum;

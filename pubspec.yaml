@@ -10,25 +10,84 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.2.2
-  confetti: ^0.7.0
+  confetti: ^0.8.0
   audioplayers: ^6.0.0      # uncomment when you add sounds
-  # sensors_plus: ^6.0.0    # optional for shake gesture
+  sensors_plus: ^6.0.0    # optional for shake gesture
+  gal: ^2.3.0
+  image_picker: ^1.1.2
+  path_provider: ^2.0.0
+  image_gallery_saver_plus: ^4.0.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
   
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo.png"
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/       # place your dino, chocolate, hat images here
+
     - assets/sounds/       # place bg.mp3, eat.mp3, win.mp3, footstep.mp3
     - assets/images/logo.png
     - assets/dino/idle.png
     - assets/dino/walk.png
     - assets/dino/eat.png
+    - assets/images/candy.jpg
+    - assets/images/lollipop.jpg
+    - assets/images/cupcake.jpg
+    - assets/images/chocolate.jpg
+    - assets/images/donut.jpg
+    - assets/images/cookie.jpg
+    - assets/images/cake.jpg
+    - assets/images/slice.jpg
+    - assets/images/rainbow_chocolate.jpg
+    - assets/images/golden_chocolate.jpg
+    - assets/images/gift.jpg
+    - assets/images/bomb.png
+    - assets/obstacles/jungle_tree.jpg
+    - assets/obstacles/jungle_palm.jpg
+    - assets/obstacles/jungle_rock.jpg
+    - assets/obstacles/jungle_bush.jpg
+    - assets/obstacles/jungle_log.jpg
+    - assets/obstacles/ice_crystal.jpg
+    - assets/obstacles/ice_block.jpg
+    - assets/obstacles/ice_snowman.jpg
+    - assets/obstacles/ice_snowflake.jpg
+    - assets/obstacles/ice_gem.jpg
+    - assets/obstacles/volcano_rock.jpg
+    - assets/obstacles/volcano_lava.jpg
+    - assets/obstacles/volcano_fire.jpg
+    - assets/obstacles/volcano_smoke.jpg
+    - assets/obstacles/volcano_bomb.jpg
+    - assets/obstacles/space_planet.jpg
+    - assets/obstacles/space_star.jpg
+    - assets/obstacles/space_rocket.jpg
+    - assets/obstacles/space_comet.jpg
+    - assets/obstacles/space_ufo.jpg
+    - assets/images/hidden_enemy.png
+
+    - assets/backgrounds/jungle_bg.png
+    - assets/backgrounds/candy_bg.png
+    - assets/backgrounds/ice_bg.png
+    - assets/backgrounds/volcano_bg.png
+    - assets/backgrounds/space_bg.png
+    - assets/images/jungle_choco.png
+    - assets/images/candy_choco.png
+    - assets/images/ice_choco.png
+    - assets/images/volcano_choco.png
+    - assets/images/space_choco.png
+    - assets/dino/dino_footprint_left.png
+    - assets/dino/dino_footprint_right.png
+    - assets/dino/star_filled.png
+    - assets/dino/star_empty.png
+    - assets/dino/dino_trophy.png
   fonts:
     - family: GameFont
       fonts:
