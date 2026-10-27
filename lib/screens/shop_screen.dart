@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/player_progress.dart';
 import '../widgets/logo.dart';
+import '../theme/design_tokens.dart';
 
 enum ShopCategory { skins, hats }
 
@@ -146,9 +147,6 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
     );
   }
 
-  // Items in the current category the player doesn't own yet and hasn't
-  // already added to the cart — used to upsell more items while they're
-  // reviewing their cart.
   List<String> get _suggestedItems {
     return _currentItems.keys
         .where((item) => !_isOwned(item) && !_cart.contains(item))
@@ -235,171 +233,174 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
         ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 60,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.white70,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Center(
-                    child: ChocoDinoLogo(fontSize: 24, showIcon: true),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        '🛒 SHOP',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 60,
+                        height: 5,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.amber.shade400, Colors.amber.shade600],
-                          ),
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.amber.withOpacity(0.5),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                          border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.star, color: Colors.white, size: 20),
-                            const SizedBox(width: 5),
-                            Text(
-                              '${widget.progress.totalPoints}',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ],
+                          color: Colors.white70,
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(30),
                     ),
-                    child: Row(
-                      children: [
-                        _buildCategoryTab(ShopCategory.skins, '🍫 Skins'),
-                        _buildCategoryTab(ShopCategory.hats, '🎩 Hats'),
-                      ],
+                    const SizedBox(height: 12),
+                    const Center(
+                      child: ChocoDinoLogo(fontSize: 24, showIcon: true),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    child: _currentCategory == ShopCategory.skins
-                        ? _buildSkinsGrid()
-                        : _buildHatsGrid(),
-                  ),
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
-          ),
-          // ---- "ADD MORE TO YOUR CART" UPSELL STRIP ----
-          if (_cart.isNotEmpty && _suggestedItems.isNotEmpty) _buildSuggestionsStrip(),
-          // ---- FIXED CART BAR ----
-          if (_cart.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.95),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 12,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '${_cart.length} item${_cart.length > 1 ? 's' : ''} in cart',
-                          style: const TextStyle(
+                        const Text(
+                          '🛒 SHOP',
+                          style: TextStyle(
+                            fontSize: 32,
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.black87,
+                            color: Colors.white,
+                            letterSpacing: 2,
                           ),
                         ),
-                        Text(
-                          'Total: $_cartTotal pts',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.amber.shade400, Colors.amber.shade600],
+                            ),
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.amber.withOpacity(0.5),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.star, color: Colors.white, size: 20),
+                              const SizedBox(width: 5),
+                              Text(
+                                '${widget.progress.totalPoints}',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: _clearCart,
-                        child: const Text('Clear', style: TextStyle(color: Colors.red)),
+                    const SizedBox(height: 30),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(30),
                       ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: (_cartTotal > 0 && widget.progress.totalPoints >= _cartTotal)
-                            ? _checkout
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4CAF50),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                        icon: const Icon(Icons.shopping_cart_checkout),
-                        label: const Text('Buy All'),
+                      child: Row(
+                        children: [
+                          _buildCategoryTab(ShopCategory.skins, '🍫 Skins'),
+                          _buildCategoryTab(ShopCategory.hats, '🎩 Hats'),
+                        ],
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 24),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: _currentCategory == ShopCategory.skins
+                          ? _buildSkinsGrid()
+                          : _buildHatsGrid(),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
             ),
-        ],
+            // ---- "ADD MORE TO YOUR CART" UPSELL STRIP ----
+            if (_cart.isNotEmpty && _suggestedItems.isNotEmpty) _buildSuggestionsStrip(),
+            // ---- FIXED CART BAR ----
+            if (_cart.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.95),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 12,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${_cart.length} item${_cart.length > 1 ? 's' : ''} in cart',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          Text(
+                            'Total: $_cartTotal pts',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: _clearCart,
+                          child: const Text('Clear', style: TextStyle(color: Colors.red)),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: (_cartTotal > 0 && widget.progress.totalPoints >= _cartTotal)
+                              ? _checkout
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4CAF50),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          icon: const Icon(Icons.shopping_cart_checkout),
+                          label: const Text('Buy All'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -14,7 +14,7 @@ class SweetWorld {
   final String obstacleKey;
   final String chocolateImagePath;
   final List<String> obstacleEmojis;
-  final int? unlockLevel; // NEW: nullable, null = always unlocked
+  final int unlockPrice; // NEW: 0 = free / default
 
   const SweetWorld({
     required this.name,
@@ -29,7 +29,7 @@ class SweetWorld {
     required this.obstacleKey,
     required this.chocolateImagePath,
     required this.obstacleEmojis,
-    this.unlockLevel, // new
+    this.unlockPrice = 0,
   });
 }
 
@@ -47,7 +47,7 @@ const List<SweetWorld> kSweetWorlds = [
     obstacleKey: 'jungle',
     chocolateImagePath: 'assets/images/jungle_choco.png',
     obstacleEmojis: ['🌳', '🌴', '🪨', '🌿', '🪵'],
-    unlockLevel: null, // always available
+    unlockPrice: 0,
   ),
   SweetWorld(
     name: 'Candy Land',
@@ -62,7 +62,7 @@ const List<SweetWorld> kSweetWorlds = [
     obstacleKey: 'candy',
     chocolateImagePath: 'assets/images/candy_choco.png',
     obstacleEmojis: ['🍭', '🍬', '🍪', '🧁', '🍫'],
-    unlockLevel: 5,
+    unlockPrice: 200,
   ),
   SweetWorld(
     name: 'Ice World',
@@ -77,7 +77,7 @@ const List<SweetWorld> kSweetWorlds = [
     obstacleKey: 'ice',
     chocolateImagePath: 'assets/images/ice_choco.png',
     obstacleEmojis: ['❄️', '🧊', '⛄', '🌨️', '💎'],
-    unlockLevel: 10,
+    unlockPrice: 500,
   ),
   SweetWorld(
     name: 'Volcano',
@@ -92,7 +92,7 @@ const List<SweetWorld> kSweetWorlds = [
     obstacleKey: 'volcano',
     chocolateImagePath: 'assets/images/volcano_choco.png',
     obstacleEmojis: ['🌋', '🪨', '🔥', '💨', '🧨'],
-    unlockLevel: 20,
+    unlockPrice: 1000,
   ),
   SweetWorld(
     name: 'Space',
@@ -107,7 +107,7 @@ const List<SweetWorld> kSweetWorlds = [
     obstacleKey: 'space',
     chocolateImagePath: 'assets/images/space_choco.png',
     obstacleEmojis: ['🪐', '💫', '🌟', '☄️', '🚀'],
-    unlockLevel: 30,
+    unlockPrice: 2000,
   ),
 ];
 

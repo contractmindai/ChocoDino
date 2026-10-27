@@ -2,6 +2,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/sweet_world.dart';
+import '../theme/design_tokens.dart';
 
 // ============================================================================
 // COLOR UTILS
@@ -11,6 +12,22 @@ extension _ColorUtils on Color {
     final hsl = HSLColor.fromColor(this);
     return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
   }
+}
+
+// ============================================================================
+// ACCESSIBLE COLOR HELPERS
+// ============================================================================
+
+Color _accessibleAccent(Color base) {
+  final hsl = HSLColor.fromColor(base);
+  return hsl
+      .withLightness(hsl.lightness.clamp(0.0, 0.32))
+      .withSaturation(hsl.saturation.clamp(0.45, 0.9))
+      .toColor();
+}
+
+Color _onColor(Color background) {
+  return background.computeLuminance() > 0.55 ? const Color(0xFF3E2723) : Colors.white;
 }
 
 // ============================================================================
@@ -122,14 +139,14 @@ class _ThemedDialogState extends State<ThemedDialog>
                 ),
                 Dialog(
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(32),
+                    borderRadius: AppRadius.xlAll,
                     side: BorderSide(color: primary.withOpacity(0.5), width: 3),
                   ),
                   backgroundColor: Colors.white.withOpacity(0.95),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(32),
+                      borderRadius: AppRadius.xlAll,
                       gradient: LinearGradient(
                         colors: [
                           Colors.white.withOpacity(0.98),
@@ -162,7 +179,7 @@ class _ThemedDialogState extends State<ThemedDialog>
                           style: TextStyle(
                             fontSize: fontSize,
                             fontWeight: FontWeight.bold,
-                            color: primary,
+                            color: _accessibleAccent(primary),
                             shadows: [
                               Shadow(
                                 color: primary.withOpacity(0.3),
@@ -339,7 +356,7 @@ class _ThemedButtonState extends State<ThemedButton>
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(40),
+                    borderRadius: AppRadius.pillAll,
                     boxShadow: [
                       BoxShadow(color: primary.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4)),
                     ],
@@ -448,6 +465,8 @@ class _CartoonButtonState extends State<CartoonButton>
     final baseColor = widget.primary ? primary : secondary;
     final borderColor = baseColor.darken(0.3);
     final shadowOffset = _pressed ? 0.0 : 3.0;
+    final labelColor = _onColor(baseColor);
+    final labelShadow = labelColor == Colors.white ? Colors.black26 : Colors.white70;
 
     return GestureDetector(
       onTapDown: _onTapDown,
@@ -462,7 +481,7 @@ class _CartoonButtonState extends State<CartoonButton>
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 color: baseColor,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppRadius.mdAll,
                 border: Border.all(color: borderColor, width: 3),
                 boxShadow: [
                   BoxShadow(
@@ -476,18 +495,18 @@ class _CartoonButtonState extends State<CartoonButton>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (widget.icon != null) ...[
-                    Icon(widget.icon, color: Colors.white, size: fontSize + 4),
+                    Icon(widget.icon, color: labelColor, size: fontSize + 4),
                     const SizedBox(width: 8),
                   ],
                   Text(
                     widget.label,
                     style: TextStyle(
-                      color: Colors.white,
+                      color: labelColor,
                       fontWeight: FontWeight.w900,
                       fontSize: fontSize,
                       letterSpacing: 1.2,
-                      shadows: const [
-                        Shadow(color: Colors.black26, blurRadius: 2, offset: Offset(1, 1)),
+                      shadows: [
+                        Shadow(color: labelShadow, blurRadius: 2, offset: const Offset(1, 1)),
                       ],
                     ),
                   ),
@@ -551,14 +570,53 @@ Future<T?> showCartoonDialog<T>({
   String? backgroundImagePath,
 }) {
   final primary = world.primaryColor;
+  final readablePrimary = _accessibleAccent(primary);
   final borderColor = primary.darken(0.3);
 
-  // The visible dialog content – now with TRANSPARENT background
+  // Build the content (Column) that will be wrapped in a scrollable view.
+  Widget contentColumn = Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (iconEmoji != null) ...[
+        Text(iconEmoji, style: const TextStyle(fontSize: 36)),
+        const SizedBox(height: 8),
+      ],
+      if (title.isNotEmpty) ...[
+        Text(
+          title,
+          style: TextStyle(fontSize: AppFontSize.headline, fontWeight: FontWeight.w900, color: readablePrimary),
+          textAlign: TextAlign.center,
+        ),
+      ],
+      if (subtitle != null && subtitle.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Text(subtitle, style: const TextStyle(fontSize: AppFontSize.bodyLarge, color: Colors.grey), textAlign: TextAlign.center),
+      ],
+      if (body != null) ...[
+        const SizedBox(height: 12),
+        body,
+      ],
+      const SizedBox(height: 24),
+      Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
+        children: actions,
+      ),
+    ],
+  );
+
+  // Wrap the content in a SingleChildScrollView to prevent overflow.
+  Widget scrollableContent = SingleChildScrollView(
+    child: contentColumn,
+  );
+
+  // The container that holds the dialog with the background.
   Widget dialogContent = Container(
     padding: const EdgeInsets.all(24),
     decoration: BoxDecoration(
-      color: Colors.transparent,   // ← changed from Colors.white to transparent
-      borderRadius: BorderRadius.circular(32),
+      color: Colors.transparent,
+      borderRadius: AppRadius.xlAll,
       border: Border.all(color: borderColor, width: 4),
       boxShadow: [
         BoxShadow(
@@ -568,51 +626,21 @@ Future<T?> showCartoonDialog<T>({
         ),
       ],
     ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (iconEmoji != null) ...[
-          Text(iconEmoji, style: const TextStyle(fontSize: 36)),
-          const SizedBox(height: 8),
-        ],
-        if (title.isNotEmpty) ...[
-          Text(
-            title,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: primary),
-            textAlign: TextAlign.center,
-          ),
-        ],
-        if (subtitle != null && subtitle.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(subtitle, style: const TextStyle(fontSize: 16, color: Colors.grey), textAlign: TextAlign.center),
-        ],
-        if (body != null) ...[
-          const SizedBox(height: 12),
-          body,
-        ],
-        const SizedBox(height: 24),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
-          children: actions,
-        ),
-      ],
-    ),
+    child: scrollableContent,
   );
 
-  // If a background image is provided, wrap with image + white overlay
+  // If a background image is provided, wrap with image + white overlay.
   if (backgroundImagePath != null && backgroundImagePath.isNotEmpty) {
     dialogContent = Stack(
       children: [
         // 1. The world image
         Positioned.fill(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: AppRadius.xlAll,
             child: Image.asset(
               backgroundImagePath,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(color: Colors.red), // temporary red to catch errors
+              errorBuilder: (context, error, stackTrace) => Container(color: Colors.red),
             ),
           ),
         ),
@@ -621,7 +649,7 @@ Future<T?> showCartoonDialog<T>({
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(32),
+              borderRadius: AppRadius.xlAll,
             ),
           ),
         ),
@@ -635,7 +663,7 @@ Future<T?> showCartoonDialog<T>({
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: AppRadius.xlAll,
         border: Border.all(color: borderColor, width: 4),
         boxShadow: [
           BoxShadow(
@@ -645,33 +673,7 @@ Future<T?> showCartoonDialog<T>({
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (iconEmoji != null) ...[
-            Text(iconEmoji, style: const TextStyle(fontSize: 36)),
-            const SizedBox(height: 8),
-          ],
-          if (title.isNotEmpty) ...[
-            Text(title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: primary), textAlign: TextAlign.center),
-          ],
-          if (subtitle != null && subtitle.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(subtitle, style: const TextStyle(fontSize: 16, color: Colors.grey), textAlign: TextAlign.center),
-          ],
-          if (body != null) ...[
-            const SizedBox(height: 12),
-            body,
-          ],
-          const SizedBox(height: 24),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: actions,
-          ),
-        ],
-      ),
+      child: scrollableContent,
     );
   }
 

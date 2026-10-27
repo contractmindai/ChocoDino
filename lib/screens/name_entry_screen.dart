@@ -1,12 +1,14 @@
 // lib/screens/name_entry_screen.dart
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'dart:ui' as ui;
 import '../widgets/logo.dart';
 import '../models/sweet_world.dart';
 import 'game_home_screen.dart';
+import '../models/player_progress.dart';
 
 // ============================================================================
-// THEMED BUTTON
+// THEMED BUTTON (with idle animation – fixed TickerProvider)
 // ============================================================================
 
 class _ThemedButton extends StatefulWidget {
@@ -29,21 +31,31 @@ class _ThemedButton extends StatefulWidget {
 }
 
 class _ThemedButtonState extends State<_ThemedButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+    with TickerProviderStateMixin {
+  late AnimationController _pressController;
+  late AnimationController _idleController;
+  late Animation<double> _idleScale;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _pressController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 100),
+      duration: const Duration(milliseconds: 120),
+    );
+    _idleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    _idleScale = Tween<double>(begin: 1.0, end: 1.04).animate(
+      CurvedAnimation(parent: _idleController, curve: Curves.easeInOut),
     );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _pressController.dispose();
+    _idleController.dispose();
     super.dispose();
   }
 
@@ -54,73 +66,86 @@ class _ThemedButtonState extends State<_ThemedButton>
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
     final padding = isTablet ? 22.0 : 16.0;
-    final fontSize = isTablet ? 19.0 : 17.0;
+    final fontSize = isTablet ? 22.0 : 18.0;
 
-    return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        widget.onPressed();
-      },
-      onTapCancel: () => _controller.reverse(),
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) {
-          final scale = 1.0 - 0.05 * _controller.value;
-          final opacity = 1.0 - 0.1 * _controller.value;
-          return Transform.scale(
-            scale: scale,
-            child: Opacity(
-              opacity: opacity,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding * 0.75),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: widget.primary
-                        ? [primary, secondary]
-                        : [primary.withOpacity(0.6), secondary.withOpacity(0.6)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(40),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primary.withOpacity(0.45),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.4),
-                    width: 2,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.icon != null) ...[
-                      Icon(widget.icon, color: Colors.white, size: fontSize + 2),
-                      const SizedBox(width: 8),
-                    ],
-                    Text(
-                      widget.label,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: fontSize,
-                        letterSpacing: 0.3,
-                        shadows: const [
-                          Shadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1)),
+    return AnimatedBuilder(
+      animation: _idleController,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _idleScale.value,
+          child: GestureDetector(
+            onTapDown: (_) => _pressController.forward(),
+            onTapUp: (_) {
+              _pressController.reverse();
+              widget.onPressed();
+            },
+            onTapCancel: () => _pressController.reverse(),
+            child: AnimatedBuilder(
+              animation: _pressController,
+              builder: (context, child) {
+                final scale = 1.0 - 0.06 * _pressController.value;
+                final opacity = 1.0 - 0.1 * _pressController.value;
+                return Transform.scale(
+                  scale: scale,
+                  child: Opacity(
+                    opacity: opacity,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: padding * 1.2, vertical: padding * 0.8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: widget.primary
+                              ? [primary, secondary]
+                              : [primary.withOpacity(0.6), secondary.withOpacity(0.6)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(60),
+                        boxShadow: [
+                          BoxShadow(
+                            color: primary.withOpacity(0.5),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                          BoxShadow(
+                            color: Colors.white.withOpacity(0.3),
+                            blurRadius: 4,
+                            offset: const Offset(-2, -2),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.5),
+                          width: 2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.icon != null) ...[
+                            Icon(widget.icon, color: Colors.white, size: fontSize + 4),
+                            const SizedBox(width: 10),
+                          ],
+                          Text(
+                            widget.label,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: fontSize,
+                              letterSpacing: 1.2,
+                              shadows: const [
+                                Shadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -130,14 +155,12 @@ extension _ColorUtils on Color {
     final hsl = HSLColor.fromColor(this);
     return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
   }
-  Color lighten(double amount) {
-    final hsl = HSLColor.fromColor(this);
-    return hsl.withLightness((hsl.lightness + amount).clamp(0.0, 1.0)).toColor();
-  }
 }
 
+
+
 // ============================================================================
-// SPARKLE PARTICLES
+// SPARKLE PARTICLES (unchanged)
 // ============================================================================
 
 class _Sparkle {
@@ -194,7 +217,7 @@ class _SparkleField extends StatelessWidget {
 }
 
 // ============================================================================
-// NAME ENTRY SCREEN
+// NAME ENTRY SCREEN – transparent glass card, larger, no footprint trail
 // ============================================================================
 
 class NameEntryScreen extends StatefulWidget {
@@ -210,15 +233,15 @@ class _NameEntryScreenState extends State<NameEntryScreen>
   late final AnimationController _bgController;
   late final AnimationController _parallaxController;
   late final AnimationController _idleController;
-  late final Animation<double> _bobAnimation;
 
   late final List<_Sparkle> _sparkles;
 
+  String _enteredName = '';
+  bool _isNameComplete = false;
   bool _isFocused = false;
 
   static const primaryColor = Color(0xFFFF6F00);
   static const secondaryColor = Color(0xFFFFAB00);
-  static const cardColor = Color(0xFFFFF8E1);
 
   @override
   void initState() {
@@ -236,19 +259,16 @@ class _NameEntryScreenState extends State<NameEntryScreen>
 
     _idleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
-    _bobAnimation = Tween<double>(begin: -4, end: 4).animate(
-      CurvedAnimation(parent: _idleController, curve: Curves.easeInOut),
-    );
 
     final rand = Random();
     const emojis = ['🍫', '✨', '🌟', '🍬', '💫'];
-    _sparkles = List.generate(9, (i) {
+    _sparkles = List.generate(12, (i) {
       return _Sparkle(
         x: rand.nextDouble(),
         baseY: rand.nextDouble(),
-        size: 14 + rand.nextDouble() * 14,
+        size: 14 + rand.nextDouble() * 18,
         speed: 0.5 + rand.nextDouble() * 0.7,
         phase: rand.nextDouble() * 2 * pi,
         emoji: emojis[rand.nextInt(emojis.length)],
@@ -257,6 +277,14 @@ class _NameEntryScreenState extends State<NameEntryScreen>
 
     _nameFocusNode.addListener(() {
       setState(() => _isFocused = _nameFocusNode.hasFocus);
+    });
+
+    _nameController.addListener(() {
+      final name = _nameController.text.trim();
+      setState(() {
+        _enteredName = name;
+        _isNameComplete = name.isNotEmpty;
+      });
     });
   }
 
@@ -270,9 +298,15 @@ class _NameEntryScreenState extends State<NameEntryScreen>
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     String name = _nameController.text.trim();
     if (name.isEmpty) name = 'Rex';
+
+    final progress = await PlayerProgress.load();
+    progress.dinoName = name;
+    await progress.save();
+
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => GameHomeScreen(dinoName: name)),
@@ -281,7 +315,11 @@ class _NameEntryScreenState extends State<NameEntryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width > 600;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth > 600;
+    // Make the card much larger – use 95% of screen width, capped at 560px for tablets.
+    final cardWidth = isTablet ? 560.0 : screenWidth * 0.92;
+    final dinoSize = isTablet ? 180.0 : 160.0;
 
     final bgImage = Image.asset(
       kSweetWorlds[0].backgroundImagePath,
@@ -298,24 +336,9 @@ class _NameEntryScreenState extends State<NameEntryScreen>
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const ChocoDinoLogo(fontSize: 28),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [primaryColor, secondaryColor],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-      ),
       body: Stack(
         children: [
-          // ---- Background ----
+          // Background with parallax
           Positioned.fill(
             child: AnimatedBuilder(
               animation: _parallaxController,
@@ -329,15 +352,14 @@ class _NameEntryScreenState extends State<NameEntryScreen>
               child: bgImage,
             ),
           ),
-
-          // ---- Overlay ----
+          // Overlay (lighter to make glass pop)
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(0.3),
                     Colors.black.withOpacity(0.1),
+                    Colors.black.withOpacity(0.05),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -346,204 +368,150 @@ class _NameEntryScreenState extends State<NameEntryScreen>
             ),
           ),
 
-          // ---- Decorative dino silhouette ----
-          Positioned(
-            top: 30,
-            right: -50,
-            child: AnimatedBuilder(
-              animation: _bgController,
-              builder: (context, child) => Transform.rotate(
-                angle: -_bgController.value * 0.12,
-                child: child,
-              ),
-              child: Opacity(
-                opacity: 0.03,
-                child: Transform.flip(
-                  flipX: true,
-                  child: Image.asset(
-                    'assets/dino/idle.png',
-                    width: 180,
-                    height: 180,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Text('🦕', style: TextStyle(fontSize: 100)),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // ---- Sparkles ----
+          // Sparkles
           Positioned.fill(
             child: _SparkleField(controller: _bgController, sparkles: _sparkles),
           ),
 
-          // ---- Main content ----
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: TweenAnimationBuilder(
-                tween: Tween<double>(begin: 0, end: 1),
-                duration: const Duration(milliseconds: 600),
-                curve: Curves.easeOut,
-                builder: (context, opacity, child) => Opacity(opacity: opacity, child: child),
-                child: Container(
-                  width: isTablet ? 460 : null,
-                  margin: const EdgeInsets.all(24),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      // ---- Premium card ----
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(32, 40, 32, 32),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [cardColor.withOpacity(0.98), cardColor.withOpacity(0.9)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+          // Main content
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+
+
+                    const SizedBox(height: 16),
+
+                    // ---- Glass‑morphism card (larger, with logo) ----
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(48),
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                        child: Container(
+                          width: cardWidth,
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.all(32),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withOpacity(0.18),
+                                Colors.white.withOpacity(0.10),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(48),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 30,
+                                offset: const Offset(0, 16),
+                              ),
+                            ],
                           ),
-                          borderRadius: BorderRadius.circular(48),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.25),
-                              blurRadius: 36,
-                              offset: const Offset(0, 18),
-                            ),
-                            BoxShadow(
-                              color: primaryColor.withOpacity(0.25),
-                              blurRadius: 20,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.7),
-                            width: 4,
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // ---- Assistant dino on the left side of heading ----
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  // Dino mascot on the left
-                                  AnimatedBuilder(
-                                    animation: _idleController,
-                                    builder: (context, child) => Transform.translate(
-                                      offset: Offset(0, _bobAnimation.value),
-                                      child: Image.asset(
-                                        'assets/dino/idle.png',
-                                        width: 44,
-                                        height: 44,
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (_, __, ___) =>
-                                            const Text('🦕', style: TextStyle(fontSize: 32)),
-                                      ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // ---- Logo (bigger) ----
+                              Image.asset(
+                                'assets/images/logo.png',
+                                height: 80, // increased from 50
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) =>
+                                    const Text('🦕', style: TextStyle(fontSize: 60)),
+                              ),
+                              const SizedBox(height: 12),
+
+                              // ---- Title ----
+                              const Text(
+                                'NAME YOUR DINO!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
+                                  color: primaryColor,
+                                  letterSpacing: 1.5,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black12,
+                                      blurRadius: 4,
+                                      offset: Offset(1, 2),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // Title
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        ShaderMask(
-                                          shaderCallback: (bounds) => const LinearGradient(
-                                            colors: [primaryColor, secondaryColor],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ).createShader(bounds),
-                                          child: const Text(
-                                            'Chocolate Eater',
-                                            style: TextStyle(
-                                              fontSize: 28,
-                                              fontWeight: FontWeight.w900,
-                                              color: Colors.white,
-                                              shadows: [
-                                                Shadow(color: Colors.black26, blurRadius: 6, offset: Offset(1, 2)),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        Text(
-                                          'Dinosaur',
-                                          style: TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.brown.shade700,
-                                            shadows: [
-                                              Shadow(
-                                                color: Colors.brown.shade200,
-                                                blurRadius: 6,
-                                                offset: const Offset(2, 2),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Meet your hungry little chocolate hunter!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.brown.shade800,
+                                  fontWeight: FontWeight.w500,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.white.withOpacity(0.6),
+                                      blurRadius: 4,
+                                      offset: Offset(1, 1),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Give your dino a name to start the adventure',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.brown.shade400,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 26),
-                            // ---- Input field ----
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(40),
-                                boxShadow: _isFocused
-                                    ? [
-                                        BoxShadow(
-                                          color: primaryColor.withOpacity(0.35),
-                                          blurRadius: 18,
-                                          offset: const Offset(0, 6),
-                                        ),
-                                      ]
-                                    : [],
-                              ),
-                              child: TextField(
+                              const SizedBox(height: 28),
+
+                              // Name input
+                              TextField(
                                 controller: _nameController,
                                 focusNode: _nameFocusNode,
                                 textCapitalization: TextCapitalization.words,
                                 maxLength: 16,
                                 onSubmitted: (_) => _submit(),
                                 decoration: InputDecoration(
-                                  labelText: "What's your dino's name?",
-                                  counterText: '',
+                                  labelText: "What should we call you?",
                                   labelStyle: TextStyle(
-                                    color: Colors.brown.shade600,
+                                    color: Colors.brown.shade800,
                                     fontWeight: FontWeight.w500,
-                                    fontSize: 16,
+                                    fontSize: 15,
                                   ),
+                                  counterText: '',
                                   filled: true,
-                                  fillColor: Colors.white.withOpacity(0.85),
+                                  fillColor: Colors.white.withOpacity(0.75),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(40),
                                     borderSide: BorderSide.none,
                                   ),
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(40),
-                                    borderSide: BorderSide(color: primaryColor.withOpacity(0.15), width: 1.5),
+                                    borderSide: BorderSide(
+                                        color: primaryColor.withOpacity(0.2), width: 1.5),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(40),
                                     borderSide: const BorderSide(color: primaryColor, width: 2),
                                   ),
-                                  prefixIcon: Icon(Icons.edit, color: Colors.brown.shade500),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                                  prefixIcon: Padding(
+                                    padding: const EdgeInsets.all(10.0),
+                                    child: Image.asset(
+                                      'assets/dino/idle.png',
+                                      width: 28,
+                                      height: 28,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                  hintText: "✏️ Enter your dino's name...",
+                                  hintStyle: TextStyle(
+                                    color: Colors.brown.shade400,
+                                    fontSize: 16,
+                                  ),
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                                 ),
                                 style: TextStyle(
                                   fontSize: 20,
@@ -551,99 +519,45 @@ class _NameEntryScreenState extends State<NameEntryScreen>
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 30),
-                            // ---- Themed button ----
-                            _ThemedButton(
-                              color: primaryColor,
-                              label: 'Start Adventure',
-                              primary: true,
-                              icon: Icons.play_arrow,
-                              onPressed: _submit,
-                            ),
-                            const SizedBox(height: 14),
-                            // ---- Footer ----
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Image.asset(
-                                  'assets/dino/idle.png',
-                                  width: 24,
-                                  height: 24,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => const Text('🦕', style: TextStyle(fontSize: 18)),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  "Let's go!",
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: Colors.brown.shade500,
-                                    fontStyle: FontStyle.italic,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // ---- Floating badge (above card) ----
-                      Positioned(
-                        top: -34,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: TweenAnimationBuilder(
-                            tween: Tween<double>(begin: -60, end: 0),
-                            duration: const Duration(milliseconds: 800),
-                            curve: Curves.elasticOut,
-                            builder: (context, entrance, child) => Transform.translate(
-                              offset: Offset(0, entrance),
-                              child: child,
-                            ),
-                            child: AnimatedBuilder(
-                              animation: _idleController,
-                              builder: (context, child) => Transform.translate(
-                                offset: Offset(0, _bobAnimation.value),
-                                child: child,
+
+                              const SizedBox(height: 28),
+
+                              // Start button
+                              _ThemedButton(
+                                color: primaryColor,
+                                label: 'PLAY',
+                                primary: true,
+                                icon: null,
+                                onPressed: _submit,
                               ),
-                              child: Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: const LinearGradient(
-                                    colors: [secondaryColor, primaryColor],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  border: Border.all(color: Colors.white, width: 4),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: primaryColor.withOpacity(0.5),
-                                      blurRadius: 18,
-                                      offset: const Offset(0, 8),
+
+                              const SizedBox(height: 8),
+
+                              // Supporting text (no footprints, just text)
+                              Text(
+                                'Your adventure is waiting!',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.brown.shade800,
+                                  fontStyle: FontStyle.italic,
+                                  fontWeight: FontWeight.w500,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.white.withOpacity(0.6),
+                                      blurRadius: 4,
+                                      offset: Offset(1, 1),
                                     ),
                                   ],
                                 ),
-                                padding: const EdgeInsets.all(10),
-                                child: Image.asset(
-                                  'assets/dino/idle.png',
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Center(
-                                      child: Text('🦕', style: TextStyle(fontSize: 36)),
-                                    );
-                                  },
-                                ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
             ),

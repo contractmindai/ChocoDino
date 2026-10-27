@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'logo.dart';
 import 'emoji_icon.dart';
+import '../theme/design_tokens.dart';
 
 /// A premium loading dialog with a progress bar and a gently bouncing
 /// dino badge. Accepts an optional [progress] (0..1) for determinate
@@ -51,7 +52,7 @@ class _PremiumLoadingDialogState extends State<PremiumLoadingDialog>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: AppRadius.xlAll,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.3),
@@ -64,7 +65,7 @@ class _PremiumLoadingDialogState extends State<PremiumLoadingDialog>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ChocoDinoLogo(fontSize: 30, showIcon: true),
+            const ChocoDinoLogo(fontSize: AppFontSize.hero, showIcon: true),
             const SizedBox(height: 18),
             AnimatedBuilder(
               animation: _controller,
@@ -85,7 +86,7 @@ class _PremiumLoadingDialogState extends State<PremiumLoadingDialog>
             ),
             const SizedBox(height: 20),
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppRadius.pillAll,
               child: SizedBox(
                 width: double.infinity,
                 child: LinearProgressIndicator(
@@ -101,7 +102,7 @@ class _PremiumLoadingDialogState extends State<PremiumLoadingDialog>
               widget.message,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: AppFontSize.bodyLarge,
                 fontWeight: FontWeight.w600,
                 shadows: [Shadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
               ),

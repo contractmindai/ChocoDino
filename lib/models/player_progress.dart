@@ -1,18 +1,20 @@
+// lib/models/player_progress.dart
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 class PlayerProgress {
-  // Keep only one counter – this one is already used throughout your app.
+  String? dinoName;
   int levelsCompletedCount;
-
-  // Your other fields...
   int totalPoints;
-  int unlockedLevel; // 1-based
+  int unlockedLevel;
   Map<int, int> starsPerLevel;
   String selectedChocolateSkin;
   String selectedHat;
   Set<String> purchasedSkins;
   Set<String> purchasedHats;
+
+  // NEW: names of worlds the player has unlocked ('Jungle' always included).
+  Set<String> purchasedWorlds;
 
   int endlessBestStage;
   int endlessBestScore;
@@ -27,8 +29,17 @@ class PlayerProgress {
 
   bool tapAssistAlwaysOn;
 
-  // Constructor – no need to change anything, the default value is already 0.
+  // World + notification fields (additive, backward-safe)
+  String selectedWorld;
+  bool remindersEnabled;
+  int reminderHour;
+  int reminderMinute;
+  bool notificationPermissionAsked;
+  String? lastPlayedAt;
+  String? lastNotificationTime;
+
   PlayerProgress({
+    this.dinoName,
     this.totalPoints = 0,
     this.unlockedLevel = 1,
     Map<int, int>? starsPerLevel,
@@ -36,29 +47,43 @@ class PlayerProgress {
     this.selectedHat = 'none',
     Set<String>? purchasedSkins,
     Set<String>? purchasedHats,
+    Set<String>? purchasedWorlds,
     this.endlessBestStage = 0,
     this.endlessBestScore = 0,
     this.lastDailyDate,
     this.dailyStreak = 0,
     this.bestDailyStreak = 0,
-    this.levelsCompletedCount = 0,   // already here – good!
+    this.levelsCompletedCount = 0,
     this.lastLoginRewardDate,
     this.loginStreak = 0,
     this.bestLoginStreak = 0,
     this.tapAssistAlwaysOn = false,
-  }) : starsPerLevel = starsPerLevel ?? {},
-       purchasedSkins = purchasedSkins ?? {'dark'},
-       purchasedHats = purchasedHats ?? {'none'};
+    this.selectedWorld = 'Jungle',
+    this.remindersEnabled = false,
+    this.reminderHour = 18,
+    this.reminderMinute = 0,
+    this.notificationPermissionAsked = false,
+    this.lastPlayedAt,
+    this.lastNotificationTime,
+  })  : starsPerLevel = starsPerLevel ?? {},
+        purchasedSkins = purchasedSkins ?? {'dark'},
+        purchasedHats = purchasedHats ?? {'none'},
+        purchasedWorlds = purchasedWorlds ?? {'Jungle'};
 
-  // toJson / fromJson / load / save remain unchanged
+  /// Sum of stars across every level — used by the star wallet in the header.
+  int get totalStars => starsPerLevel.values.fold(0, (sum, s) => sum + s);
+
   Map<String, dynamic> toJson() => {
+        'dinoName': dinoName,
         'totalPoints': totalPoints,
         'unlockedLevel': unlockedLevel,
-        'starsPerLevel': starsPerLevel.map((key, value) => MapEntry(key.toString(), value)),
+        'starsPerLevel':
+            starsPerLevel.map((key, value) => MapEntry(key.toString(), value)),
         'selectedChocolateSkin': selectedChocolateSkin,
         'selectedHat': selectedHat,
         'purchasedSkins': purchasedSkins.toList(),
         'purchasedHats': purchasedHats.toList(),
+        'purchasedWorlds': purchasedWorlds.toList(),
         'endlessBestStage': endlessBestStage,
         'endlessBestScore': endlessBestScore,
         'lastDailyDate': lastDailyDate,
@@ -69,6 +94,13 @@ class PlayerProgress {
         'loginStreak': loginStreak,
         'bestLoginStreak': bestLoginStreak,
         'tapAssistAlwaysOn': tapAssistAlwaysOn,
+        'selectedWorld': selectedWorld,
+        'remindersEnabled': remindersEnabled,
+        'reminderHour': reminderHour,
+        'reminderMinute': reminderMinute,
+        'notificationPermissionAsked': notificationPermissionAsked,
+        'lastPlayedAt': lastPlayedAt,
+        'lastNotificationTime': lastNotificationTime,
       };
 
   factory PlayerProgress.fromJson(Map<String, dynamic> json) {
@@ -80,8 +112,13 @@ class PlayerProgress {
     }
     final skins = Set<String>.from(json['purchasedSkins'] as List? ?? ['dark']);
     final hats = Set<String>.from(json['purchasedHats'] as List? ?? ['none']);
+    final worlds =
+        Set<String>.from(json['purchasedWorlds'] as List? ?? ['Jungle']);
+    // Ensure Jungle is always present even in corrupted saves.
+    worlds.add('Jungle');
 
     return PlayerProgress(
+      dinoName: json['dinoName'] as String?,
       totalPoints: json['totalPoints'] ?? 0,
       unlockedLevel: json['unlockedLevel'] ?? 1,
       starsPerLevel: starsMap,
@@ -89,6 +126,7 @@ class PlayerProgress {
       selectedHat: json['selectedHat'] ?? 'none',
       purchasedSkins: skins,
       purchasedHats: hats,
+      purchasedWorlds: worlds,
       endlessBestStage: json['endlessBestStage'] ?? 0,
       endlessBestScore: json['endlessBestScore'] ?? 0,
       lastDailyDate: json['lastDailyDate'],
@@ -99,6 +137,13 @@ class PlayerProgress {
       loginStreak: json['loginStreak'] ?? 0,
       bestLoginStreak: json['bestLoginStreak'] ?? 0,
       tapAssistAlwaysOn: json['tapAssistAlwaysOn'] ?? false,
+      selectedWorld: json['selectedWorld'] ?? 'Jungle',
+      remindersEnabled: json['remindersEnabled'] ?? false,
+      reminderHour: json['reminderHour'] ?? 18,
+      reminderMinute: json['reminderMinute'] ?? 0,
+      notificationPermissionAsked: json['notificationPermissionAsked'] ?? false,
+      lastPlayedAt: json['lastPlayedAt'],
+      lastNotificationTime: json['lastNotificationTime'],
     );
   }
 

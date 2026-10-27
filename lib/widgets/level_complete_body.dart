@@ -3,9 +3,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
+import '../models/sweet_world.dart';
 
 // ============================================================================
-// FUN FACTS — chocolate & dinosaur history, shown after each round
+// FUN FACTS — world‑specific (short & kid‑friendly)
 // ============================================================================
 class _FunFact {
   final String emoji;
@@ -13,33 +14,123 @@ class _FunFact {
   const _FunFact(this.emoji, this.text);
 }
 
-const List<_FunFact> kChocoDinoFunFacts = [
-  _FunFact('🍫', 'The word "chocolate" comes from "xocolatl," a word used by the Aztecs for their bitter, spiced cacao drink.'),
-  _FunFact('🦖', 'Dinosaur means "terrible lizard" — a name coined by scientist Richard Owen back in 1842.'),
-  _FunFact('🍫', 'The ancient Maya were drinking chocolate as a spicy, unsweetened beverage thousands of years before it became a sweet treat.'),
-  _FunFact('🦕', 'Birds are actually living dinosaurs — they evolved from small feathered theropods millions of years ago.'),
-  _FunFact('🍫', 'The Aztecs prized cacao beans so much that they used them as a form of money.'),
-  _FunFact('🦖', 'Fossils show that many dinosaurs, especially smaller ones, were covered in feathers.'),
-  _FunFact('🍫', 'Milk chocolate wasn\'t invented until 1875, when Swiss chocolatier Daniel Peter finally cracked the recipe with help from his neighbor Henri Nestlé.'),
-  _FunFact('🦕', 'Some sauropod dinosaurs grew to nearly 100 feet long — longer than several school buses parked end to end.'),
-  _FunFact('🍫', 'White chocolate isn\'t technically chocolate at all — it\'s made from cocoa butter but has none of the cocoa solids.'),
-  _FunFact('🦖', 'The dinosaurs\' reign lasted over 165 million years before an asteroid impact ended it about 66 million years ago.'),
-  _FunFact('🍫', 'It takes roughly 400 cacao beans to make just one pound of chocolate.'),
-  _FunFact('🦕', 'Not every dinosaur was a giant — some, like Compsognathus, were only about the size of a chicken.'),
-  _FunFact('🍫', 'Cacao trees only grow in a narrow band near the equator, often called the "cacao belt."'),
-  _FunFact('🦖', 'Triceratops means "three-horned face" — named for the trio of horns on its skull.'),
-  _FunFact('🍫', 'Chocolate was once so valuable in Mesoamerica that it was reserved mostly for royalty, warriors, and special ceremonies.'),
-  _FunFact('🦕', 'T. rex actually lived closer in time to us than to some earlier dinosaurs, like Stegosaurus, which roamed Earth about 80 million years before it.'),
-  _FunFact('🍫', 'Cacao was first used by people in the Amazon region of Ecuador about 5,300 years ago — over a thousand years before it reached Mesoamerica.'),
-  _FunFact('🦖', 'Megalosaurus, described in 1824, was the very first dinosaur ever given a scientific name — years before the word "dinosaur" even existed.'),
-  _FunFact('🍫', 'The scientific name for the cacao tree, Theobroma cacao, literally means "food of the gods" in Greek.'),
-  _FunFact('🦕', 'Spinosaurus is thought to have been even longer than T. rex, and may have spent much of its life swimming and hunting in rivers.'),
-  _FunFact('🍫', 'The first solid, eatable chocolate bar was created in 1847 by the British company J.S. Fry & Sons — before that, chocolate was mostly a drink.'),
-  _FunFact('🦖', 'Velociraptor was actually about the size of a turkey, not the towering movie-monster it\'s often shown as.'),
-  _FunFact('🍫', 'Early Mesoamerican chocolate drinks were often spiced with chili peppers instead of sweetened with sugar.'),
-  _FunFact('🦕', 'Dinosaur eggs and nesting sites have been discovered on every continent, including Antarctica.'),
-  _FunFact('🦖', 'Pterosaurs and plesiosaurs are often pictured alongside dinosaurs, but technically they belonged to entirely different reptile groups.'),
+// General fallback facts (chocolate & dinosaurs) – also short
+const List<_FunFact> kGeneralFunFacts = [
+  _FunFact('🍫', 'Chocolate comes from the Aztec word "xocolatl".'),
+  _FunFact('🦖', 'Dinosaur means "terrible lizard" – coined in 1842.'),
+  _FunFact('🍫', 'The Maya drank chocolate thousands of years ago.'),
+  _FunFact('🦕', 'Birds are modern‑day dinosaurs.'),
+  _FunFact('🍫', 'Aztecs used cacao beans as money.'),
+  _FunFact('🦖', 'Many small dinosaurs were covered in feathers.'),
+  _FunFact('🍫', 'Milk chocolate was invented in 1875 in Switzerland.'),
+  _FunFact('🦕', 'Some sauropods grew longer than a school bus.'),
+  _FunFact('🍫', 'White chocolate isn’t real chocolate – it has no cocoa solids.'),
+  _FunFact('🦖', 'Dinosaurs ruled Earth for 165 million years.'),
+  _FunFact('🍫', 'It takes ~400 cacao beans to make 1 lb of chocolate.'),
+  _FunFact('🦕', 'Some dinosaurs were as small as a chicken.'),
+  _FunFact('🍫', 'Cacao trees grow only near the equator.'),
+  _FunFact('🦖', 'Triceratops means "three‑horned face".'),
+  _FunFact('🍫', 'Chocolate was once reserved for royalty and warriors.'),
+  _FunFact('🦕', 'T. rex lived closer to us than to Stegosaurus.'),
+  _FunFact('🍫', 'Cacao was first used in Ecuador ~5,300 years ago.'),
+  _FunFact('🦖', 'Megalosaurus was the first dinosaur ever named.'),
+  _FunFact('🍫', 'Theobroma cacao means "food of the gods".'),
+  _FunFact('🦕', 'Spinosaurus may have been a swimming dinosaur.'),
+  _FunFact('🍫', 'The first chocolate bar was made in 1847 in Britain.'),
+  _FunFact('🦖', 'Velociraptor was the size of a turkey.'),
+  _FunFact('🍫', 'Ancient chocolate drinks were spiced with chili.'),
+  _FunFact('🦕', 'Dinosaur nests have been found on every continent.'),
+  _FunFact('🦖', 'Pterosaurs were not dinosaurs – they were flying reptiles.'),
 ];
+
+// World‑specific facts – all short, fun, and educational for kids
+const Map<String, List<_FunFact>> kWorldFunFacts = {
+  'jungle': [
+    _FunFact('🌳', 'The Amazon produces 20% of Earth\'s oxygen.'),
+    _FunFact('🐒', 'The Amazon has 40,000 plant species – more than all of Europe.'),
+    _FunFact('🌿', 'One hectare of rainforest can have 750 tree species.'),
+    _FunFact('🐆', 'Jaguars have the strongest bite of any big cat.'),
+    _FunFact('🍌', 'Bananas are berries – strawberries are not.'),
+    _FunFact('🌴', 'The Amazon is the largest river by volume.'),
+    _FunFact('🐸', 'Poison dart frogs are harmless in captivity.'),
+    _FunFact('🦜', 'Macaws can live up to 80 years.'),
+    _FunFact('🌺', 'The largest flower, Rafflesia, grows in SE Asia.'),
+    _FunFact('🐍', 'Anacondas can stay underwater for 10 minutes.'),
+    _FunFact('🦋', 'Some butterflies taste with their feet!'),
+    _FunFact('🐜', 'Leafcutter ants carry leaves 50 times their weight.'),
+    _FunFact('🌳', 'Kapok trees can grow up to 200 feet tall.'),
+    _FunFact('🌧️', 'Rainforests get up to 400 inches of rain a year.'),
+    _FunFact('🐬', 'Pink river dolphins live in the Amazon.'),
+  ],
+  'ice': [
+    _FunFact('❄️', 'Antarctica is the coldest, windiest, driest continent.'),
+    _FunFact('🧊', 'Antarctica holds 70% of the world\'s fresh water.'),
+    _FunFact('🐧', 'Emperor penguins can dive 500 metres deep.'),
+    _FunFact('🦭', 'Weddell seals can hold their breath for 80 minutes.'),
+    _FunFact('🌨️', 'Antarctica\'s record high is only 18°C.'),
+    _FunFact('🧊', 'Icebergs can be larger than small countries.'),
+    _FunFact('🐋', 'Humpback whales travel to polar seas to feed.'),
+    _FunFact('❄️', 'Snow is translucent, not white.'),
+    _FunFact('🦊', 'Arctic foxes change fur colour with the seasons.'),
+    _FunFact('🌌', 'The Northern Lights are best seen in polar regions.'),
+    _FunFact('❄️', 'The coldest place on Earth is -89°C (-128°F).'),
+    _FunFact('🐧', 'There are 17 different species of penguins.'),
+    _FunFact('🦭', 'Polar bear fur is actually transparent, not white!'),
+    _FunFact('🧊', 'Glacial ice can be over 100,000 years old.'),
+    _FunFact('🌊', 'The Arctic Ocean is the smallest ocean on Earth.'),
+  ],
+  'candy': [
+    _FunFact('🍭', 'The word "lollipop" comes from a candy tree.'),
+    _FunFact('🍬', 'Gummy bears were invented in Germany in 1922.'),
+    _FunFact('🍭', 'The world\'s largest lollipop weighed 3,000 pounds.'),
+    _FunFact('🍬', 'Cotton candy is 99% sugar.'),
+    _FunFact('🍭', 'The first chocolate bar was made in 1847.'),
+    _FunFact('🍬', 'Licorice root has been used as medicine for 4,000 years.'),
+    _FunFact('🍭', 'Twix is the world\'s most popular candy.'),
+    _FunFact('🍬', 'Marshmallows were originally made from marshmallow root.'),
+    _FunFact('🍭', 'The word "candy" comes from the Arabic word "qandi".'),
+    _FunFact('🍬', 'Jelly beans have been around since the 1860s.'),
+    _FunFact('🍭', 'The longest candy cane was over 50 feet long.'),
+    _FunFact('🍬', 'Chocolate has over 600 flavour compounds – more than wine!'),
+    _FunFact('🍩', 'The world\'s largest donut weighed over 1.7 tons.'),
+    _FunFact('🍫', 'It takes 2–4 days to make a chocolate bar.'),
+    _FunFact('🍬', 'The first candy was eaten over 4,000 years ago in Egypt.'),
+  ],
+  'volcano': [
+    _FunFact('🌋', 'Volcanoes are named after Vulcan, the Roman god of fire.'),
+    _FunFact('🔥', 'Lava can flow at up to 60 km/h – faster than a person.'),
+    _FunFact('🌋', 'Over 80% of Earth\'s surface is volcanic in origin.'),
+    _FunFact('💥', 'The 1815 Tambora eruption caused a "year without summer".'),
+    _FunFact('🌋', 'Iceland has over 30 active volcanoes.'),
+    _FunFact('🔥', 'Lava can reach 1,200°C – hot enough to melt steel.'),
+    _FunFact('🌋', 'The Ring of Fire contains 75% of the world\'s volcanoes.'),
+    _FunFact('💨', 'Volcanic ash can travel hundreds of kilometres.'),
+    _FunFact('🌋', 'Mauna Loa is the largest volcano on Earth.'),
+    _FunFact('🔥', 'Some volcanoes erupt mud or ice instead of lava.'),
+    _FunFact('🌋', 'There are over 1,500 active volcanoes on Earth.'),
+    _FunFact('💨', 'Volcanoes can create lightning during eruptions.'),
+    _FunFact('🌋', 'Olympus Mons on Mars is 2.5x taller than Everest.'),
+    _FunFact('🪨', 'Pumice, a volcanic rock, can float on water.'),
+    _FunFact('🌋', 'Volcanic ash can reach the stratosphere.'),
+  ],
+  'space': [
+    _FunFact('🪐', 'Saturn\'s rings are made of billions of ice particles.'),
+    _FunFact('🌟', 'Light takes 8 minutes to travel from the Sun to Earth.'),
+    _FunFact('🚀', 'The first human‑made object in space was the V‑2 rocket in 1944.'),
+    _FunFact('🪐', 'Jupiter is 1,300 times bigger than Earth.'),
+    _FunFact('🌌', 'The Milky Way has 100–400 billion stars.'),
+    _FunFact('🌟', 'A sugar‑cube‑sized neutron star weighs as much as all of humanity.'),
+    _FunFact('🚀', 'Apollo missions brought back 380 kg of Moon rocks.'),
+    _FunFact('🪐', 'Jupiter\'s Great Red Spot is a storm raging for 350+ years.'),
+    _FunFact('🌌', 'The universe is ~13.8 billion years old.'),
+    _FunFact('🌟', 'There are more stars than grains of sand on all beaches.'),
+    _FunFact('💫', 'A day on Venus is longer than a year on Venus.'),
+    _FunFact('🌙', 'Jupiter has over 90 known moons (Earth has only 1!).'),
+    _FunFact('☀️', 'The Sun is a star, just like the night‑time stars.'),
+    _FunFact('🪐', 'Saturn could float in a giant bathtub – it\'s lighter than water!'),
+    _FunFact('🌍', 'Earth is the only planet not named after a Greek or Roman god.'),
+  ],
+};
 
 // ============================================================================
 // COLOR HELPER — guarantees legible text regardless of how light/pale a
@@ -62,6 +153,7 @@ class LevelCompleteBody extends StatefulWidget {
   final String quote;
   final Color primaryColor;
   final Color secondaryColor;
+  final SweetWorld world;
 
   const LevelCompleteBody({
     Key? key,
@@ -73,6 +165,7 @@ class LevelCompleteBody extends StatefulWidget {
     required this.quote,
     required this.primaryColor,
     required this.secondaryColor,
+    required this.world,
   }) : super(key: key);
 
   @override
@@ -116,7 +209,9 @@ class _LevelCompleteBodyState extends State<LevelCompleteBody>
       duration: const Duration(milliseconds: 500),
     );
 
-    _funFact = kChocoDinoFunFacts[Random().nextInt(kChocoDinoFunFacts.length)];
+    // Pick a random fact based on the current world
+    final worldFacts = kWorldFunFacts[widget.world.obstacleKey] ?? kGeneralFunFacts;
+    _funFact = worldFacts[Random().nextInt(worldFacts.length)];
 
     _pointsController.addListener(() {
       setState(() {
@@ -185,7 +280,7 @@ class _LevelCompleteBodyState extends State<LevelCompleteBody>
                 scale: scale,
                 child: RawImage(
                   image: widget.dinoImage,
-                  width: 180,   // bigger size
+                  width: 180,
                   height: 180,
                   fit: BoxFit.contain,
                 ),
@@ -290,7 +385,7 @@ class _LevelCompleteBodyState extends State<LevelCompleteBody>
         ),
         const SizedBox(height: 8),
 
-        // Fun fact about chocolate & dinosaur history
+        // Fun fact – world‑specific (short)
         AnimatedBuilder(
           animation: _factController,
           builder: (context, child) {
@@ -333,13 +428,13 @@ class _LevelCompleteBodyState extends State<LevelCompleteBody>
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   _funFact.text,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
-                    height: 1.35,
+                    height: 1.3,
                     color: _readableTextColor(widget.primaryColor).withOpacity(0.95),
                   ),
                 ),

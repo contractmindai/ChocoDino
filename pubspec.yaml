@@ -17,12 +17,15 @@ dependencies:
   image_picker: ^1.1.2
   path_provider: ^2.0.0
   image_gallery_saver_plus: ^4.0.1
-
+  flutter_local_notifications: ^22.3.2
+  timezone: ^0.11.0
+  flutter_timezone: ^4.1.0
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  
+  flutter_launcher_icons: ^0.14.3
 flutter_launcher_icons:
   android: true
   ios: true
@@ -46,11 +49,8 @@ flutter:
     - assets/images/donut.jpg
     - assets/images/cookie.jpg
     - assets/images/cake.jpg
-    - assets/images/slice.jpg
-    - assets/images/rainbow_chocolate.jpg
     - assets/images/golden_chocolate.jpg
     - assets/images/gift.jpg
-    - assets/images/bomb.png
     - assets/obstacles/jungle_tree.jpg
     - assets/obstacles/jungle_palm.jpg
     - assets/obstacles/jungle_rock.jpg

@@ -7,10 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 
 import '../widgets/logo.dart';
+import '../theme/design_tokens.dart';
 
 enum FilterType { none, warm, cool, vintage }
 
@@ -30,6 +30,7 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
   Uint8List? _photoBytes;
   bool _isCapturing = true;
   bool _isProcessing = false;
+  String? _captureError;
 
   // Sticker properties
   Offset _stickerOffset = const Offset(0, 0);
@@ -68,7 +69,10 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
   }
 
   Future<void> _takePhoto() async {
-    setState(() => _isCapturing = true);
+    setState(() {
+      _isCapturing = true;
+      _captureError = null;
+    });
     try {
       final shot = await _picker.pickImage(
         source: ImageSource.camera,
@@ -92,10 +96,9 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't open the camera."), behavior: SnackBarBehavior.floating),
-        );
-        Navigator.pop(context);
+        setState(() {
+          _captureError = "Check that ChocoDino has camera permission in your device settings, then try again.";
+        });
       }
     } finally {
       if (mounted) setState(() => _isCapturing = false);
@@ -109,6 +112,7 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
     return byteData!.buffer.asUint8List();
   }
 
+  // Mobile‑only save – no web code
   Future<void> _saveToGallery() async {
     if (_photo == null || _isProcessing) return;
     setState(() => _isProcessing = true);
@@ -128,6 +132,14 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _saveAndContinue() async {
+    await _saveToGallery();
+    if (mounted) {
+      await Future.delayed(const Duration(milliseconds: 400));
+      Navigator.pop(context, true);
     }
   }
 
@@ -184,19 +196,91 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: _photo == null || _photoBytes == null
-            ? _buildLoading()
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  _baseStickerSize = (constraints.maxWidth * 0.35).clamp(120.0, 350.0);
-                  return Column(
-                    children: [
-                      Expanded(child: _buildComposite()),
-                      _buildControls(),
-                    ],
-                  );
-                },
+        child: _captureError != null
+            ? _buildCaptureError()
+            : (_photo == null || _photoBytes == null
+                ? _buildLoading()
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      _baseStickerSize = (constraints.maxWidth * 0.35).clamp(120.0, 350.0);
+                      return Column(
+                        children: [
+                          Expanded(child: _buildComposite()),
+                          _buildControls(),
+                        ],
+                      );
+                    },
+                  )),
+      ),
+    );
+  }
+
+  Widget _buildCaptureError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl, vertical: AppSpacing.xxxl),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFB74D), Color(0xFFFF9800)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: AppRadius.xlAll,
+            boxShadow: AppElevation.strong(Colors.black),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('📷', style: TextStyle(fontSize: 44)),
+              const SizedBox(height: AppSpacing.lg),
+              const Text(
+                "Couldn't open the camera",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: AppFontSize.title,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                _captureError ?? '',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: AppFontSize.body, height: 1.4),
+              ),
+              const SizedBox(height: AppSpacing.xxl),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white70),
+                      shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  ElevatedButton.icon(
+                    onPressed: _takePhoto,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Try Again'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFFFF7A00),
+                      shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -220,7 +304,7 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
     return Stack(
       fit: StackFit.expand,
       children: [
-        // ---- SHAREABLE CARD (captured) ----
+        // ---- SHAREABLE CARD ----
         Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -256,9 +340,7 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              // ---- USER PHOTO ----
                               _buildFilteredPhoto(),
-                              // ---- Bottom scrim ----
                               Positioned(
                                 left: 0,
                                 right: 0,
@@ -274,7 +356,6 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
                                   ),
                                 ),
                               ),
-                              // ---- DINO STICKER ----
                               AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 300),
                                 child: Transform.translate(
@@ -295,7 +376,6 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
                                   ),
                                 ),
                               ),
-                              // ---- LOGO (top-right) ----
                               Positioned(
                                 top: 14,
                                 right: 14,
@@ -321,7 +401,6 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
                                   ),
                                 ),
                               ),
-                              // ---- CAPTION ----
                               Positioned(
                                 left: 16,
                                 right: 16,
@@ -331,7 +410,7 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      'I took a selfie with my Dino! 🦖🍫',
+                                      'I took a selfie with my Dino!',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 15,
@@ -377,7 +456,7 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
             ),
           ),
         ),
-        // ---- ON‑SCREEN CONTROLS (not captured) ----
+        // ---- ON‑SCREEN CONTROLS ----
         Positioned(
           top: 12,
           left: 12,
@@ -508,7 +587,7 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
             ],
           ),
           const SizedBox(height: 8),
-          // Actions – only Save button
+          // Actions – only Skip & Save (no Share)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -517,18 +596,28 @@ class _SelfieWithDinoScreenState extends State<SelfieWithDinoScreen>
                 icon: const Icon(Icons.close, color: Colors.white70),
                 label: const Text('Skip', style: TextStyle(color: Colors.white70)),
               ),
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : _saveToGallery,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4CAF50),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                ),
-                icon: _isProcessing
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.download),
-                label: Text(_isProcessing ? 'Processing…' : 'Save'),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: _isProcessing ? null : _takePhoto,
+                    icon: const Icon(Icons.refresh, color: Colors.white70),
+                    label: const Text('Retake', style: TextStyle(color: Colors.white70)),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : _saveAndContinue,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    ),
+                    icon: _isProcessing
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.download),
+                    label: Text(_isProcessing ? 'Processing…' : 'Save & Continue'),
+                  ),
+                ],
               ),
             ],
           ),

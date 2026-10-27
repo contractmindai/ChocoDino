@@ -1,4 +1,5 @@
-/// Defines the parameters for a given level number. Unbounded – no band resets.
+import 'dart:math' show max, min;
+
 class DifficultyConfig {
   final int gridSize;
   final int chocolateCount;
@@ -19,48 +20,41 @@ class DifficultyConfig {
   });
 }
 
-/// Continuous difficulty – no resets, everything grows steadily.
 DifficultyConfig difficultyForLevel(int level) {
   final lvl = level.clamp(1, 200);
 
-  // ---- Grid size: 5 at level 1, +1 every 10 levels, capped at 10 ----
+  // Grid size: 5 at level 1, +1 every 10 levels, capped at 10
   final gridSize = (5 + (lvl - 1) ~/ 10).clamp(5, 10);
 
-  // ---- Chocolate count: start at 4, +1 every 4 levels ----
+  // Chocolate count
   int chocolateCount = 4 + (lvl - 1) ~/ 4;
 
-  // ---- Obstacle counts – continuous, no resets, start earlier and ramp faster ----
-  final rawTreeCount = (lvl * 2) ~/ 5;
-  final rawMineCount = lvl < 5 ? 0 : (lvl - 4) ~/ 2 + 1;
-  final rawEnemyCount = lvl < 7 ? 0 : (lvl - 6) ~/ 2 + 1;
-  final rawHazardCount = lvl < 10 ? 0 : (lvl - 9) ~/ 2 + 1;
+  // Obstacle counts – early levels get extra trees for visual interest
+  int treeCount = lvl < 2 ? 3 : (lvl < 4 ? 4 : (lvl * 2) ~/ 5 + 2);
+  int mineCount   = lvl < 4 ? 0 : (lvl - 3) ~/ 2;
+  int enemyCount  = lvl < 5 ? 0 : (lvl - 4) ~/ 2;
+  int hazardCount = lvl < 7 ? 0 : (lvl - 6) ~/ 2;
 
-  // ---- Cap obstacles to board capacity (max 45% obstacles, was 40%) ----
+  // Cap total obstacles to 45% of board
   final area = gridSize * gridSize;
   final maxObstacles = (area * 0.45).toInt();
-  int treeCount = rawTreeCount;
-  int mineCount = rawMineCount;
-  int enemyCount = rawEnemyCount;
-  int hazardCount = rawHazardCount;
-  final total = rawTreeCount + rawMineCount + rawEnemyCount + rawHazardCount;
-  if (total > maxObstacles && total > 0) {
+  int total = treeCount + mineCount + enemyCount + hazardCount;
+  if (total > maxObstacles) {
     final ratio = maxObstacles / total;
-    treeCount = (rawTreeCount * ratio).toInt();
-    mineCount = (rawMineCount * ratio).toInt();
-    enemyCount = (rawEnemyCount * ratio).toInt();
-    hazardCount = (rawHazardCount * ratio).toInt();
+    treeCount   = (treeCount   * ratio).toInt();
+    mineCount   = (mineCount   * ratio).toInt();
+    enemyCount  = (enemyCount  * ratio).toInt();
+    hazardCount = (hazardCount * ratio).toInt();
+    total = treeCount + mineCount + enemyCount + hazardCount;
   }
 
-  // Ensure chocolates fit (max 25% of board, was 35% — a lower density
-  // cap leaves more open space for hidden enemies and generally results
-  // in cleaner, more reachable boards, especially at higher levels)
-  chocolateCount = chocolateCount.clamp(3, (gridSize * gridSize) ~/ 2);
+  // Clamp chocolate count
   final maxChoc = (area * 0.25).toInt();
-  final finalChocolate = chocolateCount.clamp(3, maxChoc);
+  chocolateCount = chocolateCount.clamp(3, maxChoc);
 
   return DifficultyConfig(
     gridSize: gridSize,
-    chocolateCount: finalChocolate,
+    chocolateCount: chocolateCount,
     treeCount: treeCount,
     mineCount: mineCount,
     enemyCount: enemyCount,
@@ -68,3 +62,47 @@ DifficultyConfig difficultyForLevel(int level) {
     maxMoves: 0,
   );
 }
+
+// ============================================================================
+// PUZZLE TARGETS (used by the solver-verified generator)
+// ============================================================================
+
+class PuzzleTargets {
+  /// Board is "tight enough" when the solver finds at most this many
+  /// different valid runs. Loose early, tight late.
+  final int maxAlternativeSolutions;
+
+  /// Extra damage points a player may take beyond the intended route.
+  /// Shrinks with level so improvising costs more.
+  final int riskSlack;
+
+  /// Decoy bypasses: attractive shortcuts that skip at least one chocolate.
+  final int shortcutCount;
+
+  /// Fraction of guards (enemy/mine/hazard) placed ON the intended route
+  /// instead of beside it.
+  final double spineGateFraction;
+
+  const PuzzleTargets({
+    required this.maxAlternativeSolutions,
+    required this.riskSlack,
+    required this.shortcutCount,
+    required this.spineGateFraction,
+  });
+}
+
+PuzzleTargets puzzleTargetsForLevel(int level) {
+  final lvl = max(1, min(200, level));
+  return PuzzleTargets(
+    maxAlternativeSolutions: max(2, (20 - 0.45 * lvl).round()),
+    riskSlack: max(0, 4 - lvl ~/ 10),
+    shortcutCount: min(1 + lvl ~/ 8, 4),
+    spineGateFraction: min(0.8, 0.3 + lvl / 80),
+  );
+}
+
+/// Chocolate density cap: ~1 chocolate per 6 board cells. Anything denser
+/// cannot be spaced out along the path, which is what produced the
+/// "couple of squares apart" clusters. Difficulty comes from guards, not
+/// from cramming more chocolates in.
+int maxChocolatesForBoard(int size) => max(3, (size * size * 0.17).floor());

@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sensors_plus/sensors_plus.dart'; // <-- NEW
+import 'package:sensors_plus/sensors_plus.dart';
 
 import '../models/level_config.dart';
 import '../models/player_progress.dart';
@@ -20,6 +20,7 @@ import '../data/endless_generator.dart';
 import '../data/levels.dart';
 import '../utils/sound_manager.dart';
 import '../utils/responsive.dart';
+import '../utils/notification_service.dart';
 import '../widgets/grid_painter.dart';
 import '../widgets/logo.dart';
 import '../widgets/particle_system.dart';
@@ -31,6 +32,7 @@ import '../dialogs/tutorial_dialog.dart';
 import '../dialogs/win_dialog.dart';
 import '../dialogs/game_over_dialog.dart';
 import '../dialogs/loading_dialog.dart';
+import 'settings_screen.dart'; // Imported for the pause menu
 
 // ============================================================================
 // ENUMS & CONSTANTS
@@ -42,7 +44,7 @@ const String kChocolateCell = 'chocolate';
 
 enum ObstacleEffect { mine, enemy, hazard }
 enum GameMode { normal, daily, endless }
-enum WinDialogResult { retry, next, exit }
+enum WinDialogResult { retry, next, exit, revive }
 
 const int kStartingChances = 3;
 const int kEndlessStartingChances = 3;
@@ -103,7 +105,7 @@ const Map<String, List<String>> kWorldObstacleAssets = {
 };
 
 // ============================================================================
-// FLOATING TEXT POPUP (unchanged)
+// FLOATING TEXT POPUP
 // ============================================================================
 
 class _FloatingText extends StatefulWidget {
@@ -189,7 +191,8 @@ class _FloatingTextState extends State<_FloatingText>
                 child: Opacity(
                   opacity: _opacityAnimation.value,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: widget.color.withOpacity(0.9),
                       borderRadius: BorderRadius.circular(24),
@@ -208,7 +211,10 @@ class _FloatingTextState extends State<_FloatingText>
                         fontWeight: FontWeight.bold,
                         fontSize: 20,
                         shadows: [
-                          Shadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                          Shadow(
+                              color: Colors.black26,
+                              blurRadius: 4,
+                              offset: Offset(0, 2)),
                         ],
                       ),
                     ),
@@ -224,7 +230,7 @@ class _FloatingTextState extends State<_FloatingText>
 }
 
 // ============================================================================
-// GAME CONTROLLER (unchanged)
+// GAME CONTROLLER
 // ============================================================================
 
 class GameController extends ChangeNotifier {
@@ -245,6 +251,8 @@ class GameController extends ChangeNotifier {
 
   int totalStepsTaken = 0;
   int dragFailureCount = 0;
+
+  int parSteps = 0;
 
   void recordDragFailure() {
     dragFailureCount++;
@@ -279,7 +287,62 @@ class GameController extends ChangeNotifier {
     temporaryEffects.clear();
     collectedBonuses.clear();
     totalStepsTaken = 0;
+    parSteps = _computeParSteps();
     notifyListeners();
+  }
+
+  int _computeParSteps() {
+    final cells = level.chocolates.map((c) => Point(c.row, c.col)).toList();
+    if (cells.length <= 1) return 0;
+    final size = level.gridSize;
+    final distMaps = <int, Map<String, int>>{};
+    for (int i = 0; i < cells.length; i++) {
+      distMaps[i] = _bfsDistances(cells[i], size);
+    }
+    final remaining =
+        Set<int>.from(List.generate(cells.length - 1, (i) => i + 1));
+    int cur = 0;
+    int total = 0;
+    while (remaining.isNotEmpty) {
+      int bestIdx = -1;
+      int bestD = 1 << 30;
+      for (final idx in remaining) {
+        final d = distMaps[cur]!['${cells[idx].x},${cells[idx].y}'];
+        if (d != null && d < bestD) {
+          bestD = d;
+          bestIdx = idx;
+        }
+      }
+      if (bestIdx == -1) return level.path.length;
+      total += bestD;
+      cur = bestIdx;
+      remaining.remove(bestIdx);
+    }
+    return total;
+  }
+
+  Map<String, int> _bfsDistances(Point start, int size) {
+    final visited = <String, int>{'${start.x},${start.y}': 0};
+    final queue = Queue<Point>()..add(start);
+    const dirs = [Point(0, 1), Point(1, 0), Point(0, -1), Point(-1, 0)];
+    while (queue.isNotEmpty) {
+      final cur = queue.removeFirst();
+      final d = visited['${cur.x},${cur.y}']!;
+      for (final dir in dirs) {
+        final nx = cur.x + dir.x;
+        final ny = cur.y + dir.y;
+        if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
+        final key = '$nx,$ny';
+        if (visited.containsKey(key)) continue;
+        if (level.obstacles.contains(key)) continue;
+        if (level.mines.contains(key)) continue;
+        if (level.enemies.contains(key)) continue;
+        if (level.hazards.contains(key)) continue;
+        visited[key] = d + 1;
+        queue.add(Point(nx, ny));
+      }
+    }
+    return visited;
   }
 
   void retry() {
@@ -300,11 +363,14 @@ class GameController extends ChangeNotifier {
 
   bool isUncollectedChocolate(int row, int col) {
     final key = '$row,$col';
-    return grid[row][col] == kChocolateCell && !collectedChocolateKeys.contains(key);
+    return grid[row][col] == kChocolateCell &&
+        !collectedChocolateKeys.contains(key);
   }
 
   bool isObstacleCell(int row, int col) => checkObstacle(row, col) != null;
-  bool isAdjacent(Point a, Point b) => (a.x - b.x).abs() + (a.y - b.y).abs() == 1;
+
+  bool isAdjacent(Point a, Point b) =>
+      (a.x - b.x).abs() + (a.y - b.y).abs() == 1;
 
   ObstacleEffect? checkObstacle(int row, int col) {
     final key = '$row,$col';
@@ -375,11 +441,11 @@ class GameController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addToDragPath(Point cell) {
+  void addToDragPath(Point cell, {bool countAsStep = true}) {
     if (currentDragPath.isNotEmpty && currentDragPath.last == cell) return;
     currentDragPath.add(cell);
     dinoPos = cell;
-    totalStepsTaken++;
+    if (countAsStep) totalStepsTaken++;
     notifyListeners();
   }
 
@@ -406,17 +472,16 @@ class GameController extends ChangeNotifier {
   bool get isActive => gameActive && !win;
 
   int get bonusPointsThisLevel => collectedBonuses.length * 5;
-  int get parSteps => level.path.length;
 
   double get pathEfficiency {
-    if (totalStepsTaken <= 0) return 1.0;
+    if (totalStepsTaken <= 0 || parSteps <= 0) return 0.0;
     return (parSteps / totalStepsTaken).clamp(0.0, 1.0);
   }
 
   int get starsEarned {
     final efficiency = pathEfficiency;
-    if (chances >= 3 && efficiency >= 0.75) return 3;
-    if (chances >= 2 && efficiency >= 0.55) return 2;
+    if (chances >= 3 && efficiency >= 0.60) return 3;
+    if (chances >= 2 && efficiency >= 0.45) return 2;
     if (chances >= 1) return 1;
     return 0;
   }
@@ -425,7 +490,7 @@ class GameController extends ChangeNotifier {
 }
 
 // ============================================================================
-// FOOTSTEP DATA & PAINTER (unchanged)
+// FOOTSTEP DATA & PAINTER
 // ============================================================================
 
 enum FootType { left, right }
@@ -433,7 +498,7 @@ enum FootType { left, right }
 class Footstep {
   final Point cell;
   final FootType type;
-  final double rotation; // radians
+  final double rotation;
   Footstep(this.cell, this.type, this.rotation);
 }
 
@@ -443,7 +508,8 @@ class FootstepPainter extends CustomPainter {
   final ui.Image leftImage;
   final ui.Image rightImage;
 
-  FootstepPainter(this.footsteps, this.cellSize, this.leftImage, this.rightImage);
+  FootstepPainter(
+      this.footsteps, this.cellSize, this.leftImage, this.rightImage);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -460,8 +526,10 @@ class FootstepPainter extends CustomPainter {
       canvas.translate(center.dx, center.dy);
       canvas.rotate(fs.rotation);
 
-      final src = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
-      final dst = Rect.fromCenter(center: Offset.zero, width: fpSize, height: fpSize);
+      final src =
+          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+      final dst =
+          Rect.fromCenter(center: Offset.zero, width: fpSize, height: fpSize);
       canvas.drawImageRect(image, src, dst, paint);
 
       canvas.restore();
@@ -469,7 +537,8 @@ class FootstepPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant FootstepPainter old) => old.footsteps != footsteps;
+  bool shouldRepaint(covariant FootstepPainter old) =>
+      old.footsteps != footsteps;
 }
 
 // ============================================================================
@@ -488,13 +557,15 @@ class GamePlayScreen extends StatefulWidget {
     this.level,
     required this.progress,
     this.mode = GameMode.normal,
-  }) : assert(mode == GameMode.endless || level != null, 'level is required unless mode is GameMode.endless');
+  }) : assert(mode == GameMode.endless || level != null,
+            'level is required unless mode is GameMode.endless');
 
   @override
   State<GamePlayScreen> createState() => _GamePlayScreenState();
 }
 
-class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStateMixin {
+class _GamePlayScreenState extends State<GamePlayScreen>
+    with TickerProviderStateMixin {
   GameController? _game;
   bool _isDialogShowing = false;
   bool _isAnimatingTapPath = false;
@@ -563,13 +634,11 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
 
   final Random _rand = Random();
 
-  // Footstep fields
   ui.Image? _footLeftImage;
   ui.Image? _footRightImage;
   final List<Footstep> _footsteps = [];
   int _stepCounter = 0;
 
-  // ---- NEW: Visual tilt from accelerometer ----
   double _dinoLean = 0.0;
   StreamSubscription<AccelerometerEvent>? _sensorSub;
 
@@ -634,7 +703,10 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       _loadFirstEndlessLevel();
     } else {
       _activeLevel = widget.level!;
-      _game = GameController(level: _activeLevel!, progress: widget.progress, startingChances: kStartingChances);
+      _game = GameController(
+          level: _activeLevel!,
+          progress: widget.progress,
+          startingChances: kStartingChances);
       _updateWorld();
       _game!.addListener(_onGameStateChanged);
       _dinoMotion = DinoMotionController(
@@ -646,12 +718,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       SoundManager.playBg();
     }
 
-    // ---- NEW: Start accelerometer listener for visual tilt ----
     _sensorSub = accelerometerEvents.listen((event) {
-      // Map x-axis acceleration to a lean angle (clamped)
-      // 9.81 m/s² is 1 G. Sensitivity 0.3 (max angle ~0.3 rad ≈17°)
       final lean = (event.x / 9.81).clamp(-1.0, 1.0) * 0.3;
-      // Dead-zone to avoid jitter
       if (lean.abs() < 0.01) {
         if (_dinoLean.abs() > 0.01) {
           setState(() => _dinoLean = 0.0);
@@ -664,7 +732,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     });
   }
 
-  // ---- Load images ----
   Future<void> _loadSweetImage(String emoji) async {
     final assetPath = kSweetImageMap[emoji];
     if (assetPath == null) {
@@ -688,7 +755,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
   }
 
   Future<void> _loadObstacleImagesForWorld(String obstacleKey) async {
-    if (_currentObstacleKey == obstacleKey && _obstacleImageCache.containsKey(obstacleKey)) {
+    if (_currentObstacleKey == obstacleKey &&
+        _obstacleImageCache.containsKey(obstacleKey)) {
       return;
     }
 
@@ -699,7 +767,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       return;
     }
 
-    final assets = kWorldObstacleAssets[obstacleKey] ?? kWorldObstacleAssets['jungle']!;
+    final assets =
+        kWorldObstacleAssets[obstacleKey] ?? kWorldObstacleAssets['jungle']!;
     final images = <ui.Image?>[];
     for (final asset in assets) {
       try {
@@ -724,13 +793,15 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
   Future<void> _loadImages() async {
     try {
       final idleData = await rootBundle.load('assets/dino/idle.png');
-      final idleCodec = await ui.instantiateImageCodec(idleData.buffer.asUint8List());
+      final idleCodec =
+          await ui.instantiateImageCodec(idleData.buffer.asUint8List());
       final idleFrame = await idleCodec.getNextFrame();
       _dinoIdleImage = idleFrame.image;
 
       try {
         final walkData = await rootBundle.load('assets/dino/walk.png');
-        final walkCodec = await ui.instantiateImageCodec(walkData.buffer.asUint8List());
+        final walkCodec =
+            await ui.instantiateImageCodec(walkData.buffer.asUint8List());
         final walkFrame = await walkCodec.getNextFrame();
         _dinoWalkImage = walkFrame.image;
       } catch (_) {
@@ -739,38 +810,46 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
 
       try {
         final eatData = await rootBundle.load('assets/dino/eat.png');
-        final eatCodec = await ui.instantiateImageCodec(eatData.buffer.asUint8List());
+        final eatCodec =
+            await ui.instantiateImageCodec(eatData.buffer.asUint8List());
         final eatFrame = await eatCodec.getNextFrame();
         _dinoEatImage = eatFrame.image;
       } catch (_) {
         _dinoEatImage = _dinoIdleImage;
       }
 
-      // Footprints
-      final fpLData = await rootBundle.load('assets/dino/dino_footprint_left.png');
-      final fpLCodec = await ui.instantiateImageCodec(fpLData.buffer.asUint8List());
+      final fpLData =
+          await rootBundle.load('assets/dino/dino_footprint_left.png');
+      final fpLCodec =
+          await ui.instantiateImageCodec(fpLData.buffer.asUint8List());
       final fpLFrame = await fpLCodec.getNextFrame();
       _footLeftImage = fpLFrame.image;
 
-      final fpRData = await rootBundle.load('assets/dino/dino_footprint_right.png');
-      final fpRCodec = await ui.instantiateImageCodec(fpRData.buffer.asUint8List());
+      final fpRData =
+          await rootBundle.load('assets/dino/dino_footprint_right.png');
+      final fpRCodec =
+          await ui.instantiateImageCodec(fpRData.buffer.asUint8List());
       final fpRFrame = await fpRCodec.getNextFrame();
       _footRightImage = fpRFrame.image;
 
-      // Star images
-      final starFilledData = await rootBundle.load('assets/dino/star_filled.png');
-      final starFilledCodec = await ui.instantiateImageCodec(starFilledData.buffer.asUint8List());
+      final starFilledData =
+          await rootBundle.load('assets/dino/star_filled.png');
+      final starFilledCodec =
+          await ui.instantiateImageCodec(starFilledData.buffer.asUint8List());
       final starFilledFrame = await starFilledCodec.getNextFrame();
       _starFilledImage = starFilledFrame.image;
 
-      final starEmptyData = await rootBundle.load('assets/dino/star_empty.png');
-      final starEmptyCodec = await ui.instantiateImageCodec(starEmptyData.buffer.asUint8List());
+      final starEmptyData =
+          await rootBundle.load('assets/dino/star_empty.png');
+      final starEmptyCodec =
+          await ui.instantiateImageCodec(starEmptyData.buffer.asUint8List());
       final starEmptyFrame = await starEmptyCodec.getNextFrame();
       _starEmptyImage = starEmptyFrame.image;
 
-      // Dino trophy image
-      final trophyData = await rootBundle.load('assets/dino/dino_trophy.png');
-      final trophyCodec = await ui.instantiateImageCodec(trophyData.buffer.asUint8List());
+      final trophyData =
+          await rootBundle.load('assets/dino/dino_trophy.png');
+      final trophyCodec =
+          await ui.instantiateImageCodec(trophyData.buffer.asUint8List());
       final trophyFrame = await trophyCodec.getNextFrame();
       _dinoTrophyImage = trophyFrame.image;
 
@@ -806,7 +885,14 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
 
   @override
   void dispose() {
-    _sensorSub?.cancel(); // <-- NEW
+    widget.progress.lastPlayedAt = DateTime.now().toIso8601String();
+    widget.progress.save();
+    NotificationService.cancelAll().then((_) {
+      NotificationService.scheduleWeeklyRecap(widget.progress);
+      NotificationService.scheduleWelcomeBack(widget.progress);
+    });
+
+    _sensorSub?.cancel();
     SoundManager.removeListener(_onSoundChanged);
     _game?.removeListener(_onGameStateChanged);
     _game?.dispose();
@@ -852,12 +938,17 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     _bobAnimation = Tween<double>(begin: -5, end: 5).animate(
       CurvedAnimation(parent: _idleController, curve: Curves.easeInOut),
     );
-    _biteController = AnimationController(vsync: this, duration: const Duration(milliseconds: 150));
-    _stepController = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
-    _colorPulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 450));
-    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
+    _biteController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 150));
+    _stepController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100));
+    _colorPulseController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
+    _confettiController =
+        ConfettiController(duration: const Duration(seconds: 2));
 
-    _shakeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _shakeController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 400));
     _shakeAnimation = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 0.0, end: 8.0), weight: 1),
       TweenSequenceItem(tween: Tween(begin: 8.0, end: -6.0), weight: 1),
@@ -885,6 +976,42 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     setState(() {});
   }
 
+  // ============================================================================
+  // PAUSE MENU (NEW)
+  // ============================================================================
+  Future<void> _openPauseMenu() async {
+    _idleController.stop();
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SettingsScreen(
+          progress: widget.progress,
+          world: _currentWorld,
+          onUpdate: () {
+            if (mounted) setState(() {});
+          },
+          isPlaying: true,
+          onRestart: () {
+            _game!.retry();
+            _dinoMotion?.snapTo(_game!.dinoPos.x, _game!.dinoPos.y);
+            _resetAnimations();
+            _currentPath.clear();
+            _hoveredCells.clear();
+            _resetFootsteps();
+            setState(() {});
+          },
+          onExit: () {
+            Navigator.pop(context); // Pop GamePlayScreen
+          },
+        ),
+      ),
+    );
+    if (mounted) {
+      _idleController.repeat(reverse: true);
+      setState(() {});
+    }
+  }
+
   void _handleWin() {
     if (_isGameFinished) return;
     _isGameFinished = true;
@@ -901,7 +1028,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     }
   }
 
-  // ---- Endless logic ----
   Future<void> _handleEndlessStageCleared() async {
     if (_isLoadingNextLevel || _game == null) return;
     _isLoadingNextLevel = true;
@@ -935,6 +1061,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
         quote: quote,
         primaryColor: world.primaryColor,
         secondaryColor: world.secondaryColor,
+        world: world,
       );
 
       await showCartoonDialog(
@@ -981,9 +1108,9 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
             },
           )
           .catchError((e) {
-            _showMessage('Dino got distracted! Trying again...');
-            return generateEndlessLevelAsync(nextStage, _rand.nextInt(1 << 31));
-          });
+        _showMessage('Dino got distracted! Trying again...');
+        return generateEndlessLevelAsync(nextStage, _rand.nextInt(1 << 31));
+      });
 
       final bonus = await showDialog<int>(
         context: context,
@@ -1058,7 +1185,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
 
   void _prefetchNextStage() {
     if (_mode != GameMode.endless) return;
-    _prefetchedNextLevel = generateEndlessLevelAsync(_endlessStage + 1, _endlessRunSeed);
+    _prefetchedNextLevel =
+        generateEndlessLevelAsync(_endlessStage + 1, _endlessRunSeed);
   }
 
   Future<void> _restartEndlessRun({bool resetRun = true}) async {
@@ -1078,7 +1206,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       level = await generateEndlessLevelAsync(_endlessStage, _endlessRunSeed);
     } catch (e, st) {
       try {
-        level = await generateEndlessLevelAsync(_endlessStage, _rand.nextInt(1 << 31));
+        level = await generateEndlessLevelAsync(
+            _endlessStage, _rand.nextInt(1 << 31));
       } catch (e2, st2) {}
     }
     if (!mounted) return;
@@ -1114,7 +1243,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       level = await generateEndlessLevelAsync(_endlessStage, _endlessRunSeed);
     } catch (e, st) {
       try {
-        level = await generateEndlessLevelAsync(_endlessStage, _rand.nextInt(1 << 31));
+        level = await generateEndlessLevelAsync(
+            _endlessStage, _rand.nextInt(1 << 31));
       } catch (e2, st2) {}
     }
     if (!mounted) return;
@@ -1123,7 +1253,10 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       return;
     }
     _activeLevel = level;
-    _game = GameController(level: _activeLevel!, progress: widget.progress, startingChances: kEndlessStartingChances);
+    _game = GameController(
+        level: _activeLevel!,
+        progress: widget.progress,
+        startingChances: kEndlessStartingChances);
     _updateWorld();
     _game!.addListener(_onGameStateChanged);
     _dinoMotion = DinoMotionController(
@@ -1145,7 +1278,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     _game!.addListener(_onGameStateChanged);
   }
 
-  // ---- Tutorial ----
   void _checkTutorial() async {
     final prefs = await SharedPreferences.getInstance();
     final alreadyShown = prefs.getBool('tutorial_seen') ?? false;
@@ -1179,7 +1311,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     );
   }
 
-  void _showFloatingText(Offset globalPosition, String text, {Color color = Colors.green}) {
+  void _showFloatingText(Offset globalPosition, String text,
+      {Color color = Colors.green}) {
     final overlay = Overlay.of(context);
     OverlayEntry? entry;
     entry = OverlayEntry(
@@ -1213,7 +1346,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
   void _recordDailyCompletion() {
     final today = dailyKeyFor(DateTime.now());
     if (widget.progress.lastDailyDate == today) return;
-    final yesterday = dailyKeyFor(DateTime.now().subtract(const Duration(days: 1)));
+    final yesterday =
+        dailyKeyFor(DateTime.now().subtract(const Duration(days: 1)));
     if (widget.progress.lastDailyDate == yesterday) {
       widget.progress.dailyStreak += 1;
     } else {
@@ -1227,9 +1361,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     unawaited(widget.progress.save());
   }
 
-  // ============================================================================
-  // DIALOGS
-  // ============================================================================
   Future<void> _showWinDialog() async {
     if (_isDialogShowing || _game == null) return;
     _isDialogShowing = true;
@@ -1263,6 +1394,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       quote: quote,
       primaryColor: world.primaryColor,
       secondaryColor: world.secondaryColor,
+      world: world,
     );
 
     if (_mode == GameMode.endless) {
@@ -1300,7 +1432,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
         ],
       );
     } else {
-      // Normal mode
       final nextLevel = _activeLevel!.levelNumber + 1;
       result = await showCartoonDialog<WinDialogResult>(
         context: context,
@@ -1352,32 +1483,30 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
         break;
 
       case WinDialogResult.exit:
+      case WinDialogResult.revive:
         Navigator.pop(context);
         break;
 
       case WinDialogResult.next:
-        // For normal mode, pop with result so home screen can handle milestones/selfie
         if (_mode == GameMode.normal) {
           final levelNum = _activeLevel!.levelNumber;
           final currentStars = widget.progress.starsPerLevel[levelNum] ?? 0;
           if (stars > currentStars) {
             widget.progress.starsPerLevel[levelNum] = stars;
+            widget.progress.levelsCompletedCount++;
           }
           if (levelNum == widget.progress.unlockedLevel && levelNum < 50) {
             widget.progress.unlockedLevel = levelNum + 1;
           }
-          widget.progress.levelsCompletedCount++;
           widget.progress.totalPoints += points;
           await widget.progress.save();
           Navigator.pop(context, {'stars': stars, 'points': points});
         } else {
-          // Endless or daily – just pop
           Navigator.pop(context);
         }
         break;
 
       case null:
-        // If the dialog was dismissed without a selection, treat as exit.
         Navigator.pop(context);
         break;
     }
@@ -1463,7 +1592,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       level = await generateEndlessLevelAsync(_endlessStage, _endlessRunSeed);
     } catch (e, st) {
       try {
-        level = await generateEndlessLevelAsync(_endlessStage, _rand.nextInt(1 << 31));
+        level = await generateEndlessLevelAsync(
+            _endlessStage, _rand.nextInt(1 << 31));
       } catch (e2, st2) {}
     }
     if (!mounted) return;
@@ -1528,6 +1658,14 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       subtitle: subtitle ?? quote,
       iconEmoji: '😢',
       actions: [
+        if (_mode != GameMode.endless && widget.progress.totalPoints >= 50)
+          CartoonButton(
+            world: world,
+            label: 'Revive · 50 pts',
+            primary: false,
+            icon: Icons.favorite,
+            onPressed: () => Navigator.pop(context, WinDialogResult.revive),
+          ),
         CartoonButton(
           world: world,
           label: 'Retry',
@@ -1564,6 +1702,18 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
         }
         break;
 
+      case WinDialogResult.revive:
+        widget.progress.totalPoints -= 50;
+        await widget.progress.save();
+        _game!.chances = 3;
+        _game!.gameActive = true;
+        _isGameFinished = false;
+        _currentPath.clear();
+        _hoveredCells.clear();
+        _resetFootsteps();
+        setState(() {});
+        break;
+
       case WinDialogResult.exit:
       case WinDialogResult.next:
       case null:
@@ -1581,16 +1731,19 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     _shakeController.reset();
   }
 
-  // ---- Drag Handling ----
   Point? _getCellFromGlobalPosition(Offset globalPosition) {
     if (_activeLevel == null) return null;
-    final RenderBox? box = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? box =
+        _gridKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return null;
     final local = box.globalToLocal(globalPosition);
     final cellSize = box.size.width / _activeLevel!.gridSize;
     final row = (local.dy / cellSize).floor();
     final col = (local.dx / cellSize).floor();
-    if (row < 0 || row >= _activeLevel!.gridSize || col < 0 || col >= _activeLevel!.gridSize) {
+    if (row < 0 ||
+        row >= _activeLevel!.gridSize ||
+        col < 0 ||
+        col >= _activeLevel!.gridSize) {
       return null;
     }
     return Point(row, col);
@@ -1600,16 +1753,26 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     final path = <Point>[a];
     int x = a.x, y = a.y;
     while (x != b.x || y != b.y) {
-      if (x < b.x) x++;
-      else if (x > b.x) x--;
-      else if (y < b.y) y++;
-      else if (y > b.y) y--;
+      if (x < b.x) {
+        x++;
+      } else if (x > b.x) {
+        x--;
+      } else if (y < b.y) {
+        y++;
+      } else if (y > b.y) {
+        y--;
+      }
       path.add(Point(x, y));
     }
     return path;
   }
 
-  static const List<Point> _kAllDirs = [Point(0,1), Point(1,0), Point(0,-1), Point(-1,0)];
+  static const List<Point> _kAllDirs = [
+    Point(0, 1),
+    Point(1, 0),
+    Point(0, -1),
+    Point(-1, 0)
+  ];
 
   List<Point>? _findShortestPath(Point start, Point target) {
     final size = _activeLevel!.gridSize;
@@ -1623,11 +1786,15 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       if (last == target) return path;
       for (final dir in _kAllDirs) {
         final next = Point(last.x + dir.x, last.y + dir.y);
-        if (next.x < 0 || next.y < 0 || next.x >= size || next.y >= size) continue;
+        if (next.x < 0 || next.y < 0 || next.x >= size || next.y >= size) {
+          continue;
+        }
         final key = '${next.x},${next.y}';
         if (_activeLevel!.obstacles.contains(key)) continue;
         if (_game!.permanentPathCells.contains(key)) continue;
-        if (next != target && _game!.checkObstacle(next.x, next.y) != null) continue;
+        if (next != target && _game!.checkObstacle(next.x, next.y) != null) {
+          continue;
+        }
         if (visited.contains(next)) continue;
         visited.add(next);
         final newPath = List.of(path)..add(next);
@@ -1637,9 +1804,11 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     return null;
   }
 
-  // ---- DRAG EVENTS ----
   void _onPanStart(DragStartDetails details) {
-    if (_game == null || !_game!.isActive || _isGameFinished || _isAnimatingTapPath) return;
+    if (_game == null ||
+        !_game!.isActive ||
+        _isGameFinished ||
+        _isAnimatingTapPath) return;
     final cell = _getCellFromGlobalPosition(details.globalPosition);
     if (cell == null) return;
     if (_game!.dinoPos.x != cell.x || _game!.dinoPos.y != cell.y) {
@@ -1656,7 +1825,10 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    if (_game == null || _game!.currentDragPath.isEmpty || !_game!.isActive || _isGameFinished) return;
+    if (_game == null ||
+        _game!.currentDragPath.isEmpty ||
+        !_game!.isActive ||
+        _isGameFinished) return;
     final newCell = _getCellFromGlobalPosition(details.globalPosition);
     if (newCell == null) return;
     final last = _game!.currentDragPath.last;
@@ -1718,7 +1890,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       HapticFeedback.mediumImpact();
       SoundManager.playEat();
       _particles?.burst(
-        Offset(cell.y * _cellSize + _cellSize / 2, cell.x * _cellSize + _cellSize / 2),
+        Offset(cell.y * _cellSize + _cellSize / 2,
+            cell.x * _cellSize + _cellSize / 2),
         color: Colors.amber,
         count: 40,
       );
@@ -1731,7 +1904,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
         _isDragging = false;
         return;
       }
-      _showMessage('Yum! ${_game!.collectedChocolateKeys.length}/${_activeLevel!.chocolates.length} collected.');
       _game!.reseedDragAt(cell);
       _currentPath = [cell];
       setState(() {});
@@ -1758,7 +1930,10 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
 
   void _onPanEnd(DragEndDetails details) {
     _isDragging = false;
-    if (_game == null || _game!.currentDragPath.isEmpty || !_game!.isActive || _isGameFinished) {
+    if (_game == null ||
+        _game!.currentDragPath.isEmpty ||
+        !_game!.isActive ||
+        _isGameFinished) {
       _game?.resetDrag();
       _currentPath.clear();
       _hoveredCells.clear();
@@ -1773,7 +1948,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       HapticFeedback.mediumImpact();
       SoundManager.playEat();
       _particles?.burst(
-        Offset(last.y * _cellSize + _cellSize / 2, last.x * _cellSize + _cellSize / 2),
+        Offset(last.y * _cellSize + _cellSize / 2,
+            last.x * _cellSize + _cellSize / 2),
         color: Colors.amber,
         count: 40,
       );
@@ -1781,8 +1957,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
 
       if (_game!.hasWon) {
         _handleWin();
-      } else {
-        _showMessage('Yum! ${_game!.collectedChocolateKeys.length}/${_activeLevel!.chocolates.length} collected.');
       }
       _currentPath.clear();
       _hoveredCells.clear();
@@ -1797,7 +1971,10 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
   }
 
   Future<void> _onTapGrid(TapDownDetails details) async {
-    if (_game == null || !_game!.isActive || _isGameFinished || _isAnimatingTapPath) return;
+    if (_game == null ||
+        !_game!.isActive ||
+        _isGameFinished ||
+        _isAnimatingTapPath) return;
     if (_game!.currentDragPath.isNotEmpty) return;
     final cell = _getCellFromGlobalPosition(details.globalPosition);
     if (cell == null) return;
@@ -1805,7 +1982,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
 
     if (!_game!.tapAssistUnlocked && !widget.progress.tapAssistAlwaysOn) {
       final remaining = kTapAssistUnlockThreshold - _game!.dragFailureCount;
-      _showMessage('Draw the path yourself! Tap-assist unlocks after $remaining more slip-up${remaining == 1 ? '' : 's'}.');
+      _showMessage(
+          'Draw the path yourself! Tap-assist unlocks after $remaining more slip-up${remaining == 1 ? '' : 's'}.');
       HapticFeedback.selectionClick();
       return;
     }
@@ -1823,7 +2001,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
       for (int i = 1; i < path.length; i++) {
         if (!mounted || _game == null || !_game!.isActive) return;
         _addFootstep(path[i - 1], path[i]);
-        _game!.addToDragPath(path[i]);
+        _game!.addToDragPath(path[i], countAsStep: false);
         _currentPath.add(path[i]);
         _stepController.forward(from: 0);
         HapticFeedback.selectionClick();
@@ -1842,7 +2020,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
         HapticFeedback.mediumImpact();
         SoundManager.playEat();
         _particles?.burst(
-          Offset(target.y * _cellSize + _cellSize / 2, target.x * _cellSize + _cellSize / 2),
+          Offset(target.y * _cellSize + _cellSize / 2,
+              target.x * _cellSize + _cellSize / 2),
           color: Colors.amber,
           count: 40,
         );
@@ -1850,8 +2029,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
 
         if (_game!.hasWon) {
           _handleWin();
-        } else {
-          _showMessage('Yum! ${_game!.collectedChocolateKeys.length}/${_activeLevel!.chocolates.length} collected.');
         }
       }
     } finally {
@@ -1864,13 +2041,12 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     }
   }
 
-  // ----- Helper methods -----
   void _recordDragFailureAndMaybeAnnounce() {
     if (_game == null) return;
     final wasUnlocked = _game!.tapAssistUnlocked;
     _game!.recordDragFailure();
     if (!wasUnlocked && _game!.tapAssistUnlocked) {
-      _showMessage('💡 Tap-assist unlocked! Tap a chocolate to auto-path there.');
+      _showMessage('Tap-assist unlocked! Tap a chocolate to auto-path there.');
     }
   }
 
@@ -1879,7 +2055,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     HapticFeedback.heavyImpact();
     _showTemporaryEffect(cell.x, cell.y, '🍀 +${_game!.lastLuckyBonus}');
     _particles?.burst(
-      Offset(cell.y * _cellSize + _cellSize / 2, cell.x * _cellSize + _cellSize / 2),
+      Offset(cell.y * _cellSize + _cellSize / 2,
+          cell.x * _cellSize + _cellSize / 2),
       color: Colors.greenAccent,
     );
   }
@@ -1888,7 +2065,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     if (_game == null) return;
     if (!_game!.collectBonus(cell.x, cell.y)) return;
 
-    final RenderBox? box = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? box =
+        _gridKey.currentContext?.findRenderObject() as RenderBox?;
     if (box != null) {
       final cellSize = box.size.width / _activeLevel!.gridSize;
       final localOffset = Offset(
@@ -1950,7 +2128,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     HapticFeedback.heavyImpact();
     SoundManager.playHit();
     _particles?.explosion(
-      Offset(cell.y * _cellSize + _cellSize / 2, cell.x * _cellSize + _cellSize / 2),
+      Offset(cell.y * _cellSize + _cellSize / 2,
+          cell.x * _cellSize + _cellSize / 2),
       color: fxColor,
     );
     _game!.applyObstacleEffect(effect, cell.x, cell.y);
@@ -1990,7 +2169,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     });
   }
 
-  // ==================== BUILD ====================
   @override
   Widget build(BuildContext context) {
     if (_isLoadingFirstLevel || _activeLevel == null) {
@@ -2010,7 +2188,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
               TextButton.icon(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
-                label: const Text('Cancel', style: TextStyle(color: Colors.white)),
+                label: const Text('Cancel',
+                    style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -2019,15 +2198,16 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
     }
 
     final eatenChocolateKeys = _getEatenChocolateKeys();
-    final pathProgress = _game!.collectedChocolateKeys.length / _activeLevel!.chocolates.length;
-    final uncollectedBonuses = _activeLevel!.bonusItems.difference(_game!.collectedBonuses);
+    final pathProgress =
+        _game!.collectedChocolateKeys.length / _activeLevel!.chocolates.length;
+    final uncollectedBonuses =
+        _activeLevel!.bonusItems.difference(_game!.collectedBonuses);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           _buildWorldBackground(),
-          // ---- Grid (full screen) ----
           Center(
             child: Container(
               margin: const EdgeInsets.all(16),
@@ -2081,7 +2261,8 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               final boardSize = constraints.maxWidth;
-                              final cellSize = boardSize / _activeLevel!.gridSize;
+                              final cellSize =
+                                  boardSize / _activeLevel!.gridSize;
                               _cellSize = cellSize;
                               return RepaintBoundary(
                                 child: Stack(
@@ -2092,21 +2273,28 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
                                         gridSize: _activeLevel!.gridSize,
                                         cellSize: cellSize,
                                         grid: _game!.grid,
-                                        permanentPath: _game!.permanentPathCells,
-                                        currentDragPath: _game!.currentDragPath,
+                                        permanentPath:
+                                            _game!.permanentPathCells,
+                                        currentDragPath:
+                                            _game!.currentDragPath,
                                         nextChocolate: null,
                                         lastConnected: null,
-                                        chocolateSkin: widget.progress.selectedChocolateSkin,
+                                        chocolateSkin: widget
+                                            .progress.selectedChocolateSkin,
                                         hat: widget.progress.selectedHat,
                                         obstacles: _activeLevel!.obstacles,
                                         mines: _activeLevel!.mines,
-                                        enemies: _activeLevel!.enemies.where((key) =>
-                                            !_activeLevel!.hiddenEnemies.contains(key) ||
-                                            _revealedHiddenEnemies.contains(key)).toSet(),
+                                        enemies: _activeLevel!.enemies.where(
+                                            (key) =>
+                                                !_activeLevel!.hiddenEnemies
+                                                    .contains(key) ||
+                                                _revealedHiddenEnemies
+                                                    .contains(key)).toSet(),
                                         hazards: _activeLevel!.hazards,
                                         detours: _activeLevel!.detours,
                                         bonusItems: uncollectedBonuses,
-                                        temporaryEffects: _game!.temporaryEffects,
+                                        temporaryEffects:
+                                            _game!.temporaryEffects,
                                         dangerMap: _activeLevel!.dangerMap,
                                         world: _currentWorld,
                                         animationValue: _idleController.value,
@@ -2116,12 +2304,13 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
                                         chocolateImage: _currentSweetImage,
                                         obstacleImages: _obstacleImages,
                                         showNextChocolateHint: false,
-                                        obstacleKey: _currentWorld.obstacleKey,
+                                        obstacleKey:
+                                            _currentWorld.obstacleKey,
                                         hoveredCells: _hoveredCells,
                                       ),
                                     ),
-                                    // Footsteps
-                                    if (_footLeftImage != null && _footRightImage != null)
+                                    if (_footLeftImage != null &&
+                                        _footRightImage != null)
                                       CustomPaint(
                                         painter: FootstepPainter(
                                           _footsteps,
@@ -2137,14 +2326,16 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
                                         animation: _particles!,
                                         builder: (context, _) => CustomPaint(
                                           size: Size(boardSize, boardSize),
-                                          painter: PhysicsParticlePainter(_particles!.particles),
+                                          painter: PhysicsParticlePainter(
+                                              _particles!.particles),
                                         ),
                                       ),
                                     if (_redFlashOpacity > 0)
                                       Positioned.fill(
                                         child: IgnorePointer(
                                           child: Container(
-                                            color: Colors.red.withOpacity(_redFlashOpacity),
+                                            color: Colors.red
+                                                .withOpacity(_redFlashOpacity),
                                           ),
                                         ),
                                       ),
@@ -2161,7 +2352,6 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
               ),
             ),
           ),
-          // ---- FLOATING BACK BUTTON (top-left) ----
           Positioned(
             top: 20,
             left: 16,
@@ -2172,14 +2362,15 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                  icon:
+                      const Icon(Icons.arrow_back, color: Colors.white, size: 28),
                   onPressed: () => Navigator.pop(context),
                   tooltip: 'Exit level',
                 ),
               ),
             ),
           ),
-          // ---- FLOATING SOUND TOGGLE (top-right) ----
+          // NEW: Pause Menu Icon (Replaces Sound Toggle)
           Positioned(
             top: 20,
             right: 16,
@@ -2190,69 +2381,53 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
-                  icon: Icon(
-                    SoundManager.muted ? Icons.volume_off : Icons.volume_up,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  onPressed: () async {
-                    await SoundManager.toggleMute();
-                    setState(() {}); // Update icon
-                  },
-                  tooltip: SoundManager.muted ? 'Unmute' : 'Mute',
+                  icon: const Icon(Icons.pause, color: Colors.white, size: 28),
+                  onPressed: _openPauseMenu,
+                  tooltip: 'Menu',
                 ),
               ),
             ),
           ),
-          // ---- FLOATING STATS CHIP (bottom-right) ----
-          Positioned(
-            bottom: 32,
-            right: 16,
-            child: _StatsChip(
-              chances: _game!.chances,
-              chocolatesCollected: _game!.collectedChocolateKeys.length,
-              totalChocolates: _activeLevel!.chocolates.length,
-              bonusPoints: _game!.bonusPointsThisLevel,
-              stars: _game!.starsEarned,
-              points: _game!.pointsEarned,
-              world: _currentWorld,
-              tapAssistAlwaysOn: widget.progress.tapAssistAlwaysOn,
-              onTapAssistToggle: () async {
-                setState(() {
-                  widget.progress.tapAssistAlwaysOn = !widget.progress.tapAssistAlwaysOn;
-                });
-                await widget.progress.save();
-                _showMessage(widget.progress.tapAssistAlwaysOn
-                    ? '📌 Tap‑assist is now always available.'
-                    : '✏️ Tap‑assist will unlock after a few slip‑ups.');
-              },
-              soundMuted: SoundManager.muted,
-              onSoundToggle: SoundManager.toggleMute,
-            ),
-          ),
-          // ---- Bottom hint text ----
+          // Bottom Hint Text
           Positioned(
             bottom: 16,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.black38,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: const Text(
-                'Drag to draw a path · Tap a chocolate for the shortest route',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white,
+            left: 16,
+            right: 140, // Leaves room for stats chip
+            child: SafeArea(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black38,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: const Text(
+                  'Drag to draw a path',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
           ),
-          // ---- Confetti ----
+          // Stats Chip (Bottom Right)
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: SafeArea(
+              child: _StatsChip(
+                chances: _game!.chances,
+                chocolatesCollected: _game!.collectedChocolateKeys.length,
+                totalChocolates: _activeLevel!.chocolates.length,
+                bonusPoints: _game!.bonusPointsThisLevel,
+                stars: _game!.starsEarned,
+                points: _game!.pointsEarned,
+                world: _currentWorld,
+              ),
+            ),
+          ),
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
@@ -2358,11 +2533,13 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
         final sizeFactor = 0.6 + 0.35 * progress;
 
         final progressTint = progress * 0.55;
-        final biteFlash = (1 - _colorPulseController.value).clamp(0.0, 1.0) * 0.4;
+        final biteFlash =
+            (1 - _colorPulseController.value).clamp(0.0, 1.0) * 0.4;
         final tintOpacity = (progressTint + biteFlash).clamp(0.0, 0.85);
 
         ui.Image? image;
-        if (_game!.currentDragPath.isNotEmpty || _stepController.isAnimating) {
+        if (_game!.currentDragPath.isNotEmpty ||
+            _stepController.isAnimating) {
           image = _dinoWalkImage;
         } else if (_biteController.isAnimating) {
           image = _dinoEatImage;
@@ -2415,7 +2592,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
           width: cellSize,
           height: cellSize,
           child: Transform.rotate(
-            angle: _dinoLean, // <-- NEW: visual tilt
+            angle: _dinoLean,
             child: Transform.scale(
               scale: scale,
               child: Transform.translate(
@@ -2431,7 +2608,7 @@ class _GamePlayScreenState extends State<GamePlayScreen> with TickerProviderStat
 }
 
 // ============================================================================
-// POLISHED STATS CHIP & SHEET (unchanged)
+// CLEANED STATS CHIP
 // ============================================================================
 
 class _StatsChip extends StatefulWidget {
@@ -2442,10 +2619,6 @@ class _StatsChip extends StatefulWidget {
   final int stars;
   final int points;
   final SweetWorld world;
-  final bool tapAssistAlwaysOn;
-  final VoidCallback onTapAssistToggle;
-  final bool soundMuted;
-  final VoidCallback onSoundToggle;
 
   const _StatsChip({
     required this.chances,
@@ -2455,17 +2628,14 @@ class _StatsChip extends StatefulWidget {
     required this.stars,
     required this.points,
     required this.world,
-    required this.tapAssistAlwaysOn,
-    required this.onTapAssistToggle,
-    required this.soundMuted,
-    required this.onSoundToggle,
   });
 
   @override
   State<_StatsChip> createState() => _StatsChipState();
 }
 
-class _StatsChipState extends State<_StatsChip> with SingleTickerProviderStateMixin {
+class _StatsChipState extends State<_StatsChip>
+    with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -2499,7 +2669,7 @@ class _StatsChipState extends State<_StatsChip> with SingleTickerProviderStateMi
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.black.withOpacity(0.6), // Darker background for better legibility
                 borderRadius: BorderRadius.circular(30),
                 border: Border.all(
                   color: Colors.white.withOpacity(0.3),
@@ -2516,27 +2686,42 @@ class _StatsChipState extends State<_StatsChip> with SingleTickerProviderStateMi
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.favorite, color: Colors.red, size: 20),
+                  const Icon(Icons.favorite, color: Colors.redAccent, size: 16),
                   const SizedBox(width: 4),
                   Text('${widget.chances}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        shadows: [Shadow(color: Colors.black26, blurRadius: 2)],
+                        fontSize: 14,
+                        shadows: [
+                          Shadow(color: Colors.black26, blurRadius: 2)
+                        ],
                       )),
-                  const SizedBox(width: 12),
-                  const Text('🍫', style: TextStyle(fontSize: 18)),
+                  const SizedBox(width: 10),
+                  const Text('🍫', style: TextStyle(fontSize: 14)),
                   const SizedBox(width: 4),
-                  Text('${widget.chocolatesCollected}/${widget.totalChocolates}',
+                  Text(
+                      '${widget.chocolatesCollected}/${widget.totalChocolates}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        shadows: [Shadow(color: Colors.black26, blurRadius: 2)],
+                        fontSize: 14,
+                        shadows: [
+                          Shadow(color: Colors.black26, blurRadius: 2)
+                        ],
                       )),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.arrow_drop_up, color: Colors.white70, size: 24),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.star, color: Colors.amber, size: 16),
+                  const SizedBox(width: 2),
+                  Text('${widget.stars}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        shadows: [
+                          Shadow(color: Colors.black26, blurRadius: 2)
+                        ],
+                      )),
                 ],
               ),
             ),
@@ -2557,14 +2742,16 @@ class _StatsChipState extends State<_StatsChip> with SingleTickerProviderStateMi
           color: Color(0xFF1A1A2E),
           borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           boxShadow: [
-            BoxShadow(color: Colors.black38, blurRadius: 20, offset: Offset(0, -8)),
+            BoxShadow(
+                color: Colors.black38,
+                blurRadius: 20,
+                offset: Offset(0, -8)),
           ],
         ),
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle
               Container(
                 width: 40,
                 height: 4,
@@ -2574,14 +2761,15 @@ class _StatsChipState extends State<_StatsChip> with SingleTickerProviderStateMi
                 ),
               ),
               const SizedBox(height: 20),
-              // Stars
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(3, (i) => Icon(
-                  i < widget.stars ? Icons.star : Icons.star_border,
-                  color: Colors.amber,
-                  size: 40,
-                )),
+                children: List.generate(
+                    3,
+                    (i) => Icon(
+                          i < widget.stars ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 40,
+                        )),
               ),
               const SizedBox(height: 8),
               Text('${widget.points} points',
@@ -2591,7 +2779,6 @@ class _StatsChipState extends State<_StatsChip> with SingleTickerProviderStateMi
                     color: Colors.white,
                   )),
               const Divider(height: 32, color: Colors.white24),
-              // Stats grid
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -2607,7 +2794,8 @@ class _StatsChipState extends State<_StatsChip> with SingleTickerProviderStateMi
                     icon: Icons.emoji_events,
                     color: Colors.amber,
                     label: 'Collected',
-                    value: '${widget.chocolatesCollected}/${widget.totalChocolates}',
+                    value:
+                        '${widget.chocolatesCollected}/${widget.totalChocolates}',
                   ),
                   if (widget.bonusPoints > 0)
                     _StatItem(
@@ -2616,26 +2804,13 @@ class _StatsChipState extends State<_StatsChip> with SingleTickerProviderStateMi
                       label: 'Bonus',
                       value: '+${widget.bonusPoints}',
                     ),
-                  _StatItem(
-                    icon: widget.soundMuted ? Icons.volume_off : Icons.volume_up,
-                    color: widget.soundMuted ? Colors.grey : Colors.blue,
-                    label: 'Sound',
-                    value: widget.soundMuted ? 'Off' : 'On',
-                    onTap: widget.onSoundToggle,
-                  ),
-                  _StatItem(
-                    icon: widget.tapAssistAlwaysOn ? Icons.touch_app : Icons.touch_app_outlined,
-                    color: widget.tapAssistAlwaysOn ? Colors.amber : Colors.grey,
-                    label: 'Tap Assist',
-                    value: widget.tapAssistAlwaysOn ? 'On' : 'Off',
-                    onTap: widget.onTapAssistToggle,
-                  ),
                 ],
               ),
               const SizedBox(height: 24),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                child: const Text('Close',
+                    style: TextStyle(color: Colors.white70, fontSize: 16)),
               ),
             ],
           ),
@@ -2679,8 +2854,14 @@ class _StatItem extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
-                Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.grey.shade400)),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
               ],
             ),
           ],
@@ -2690,7 +2871,10 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-// ---- Background painters (unchanged) ----
+// ============================================================================
+// BACKGROUND PAINTERS
+// ============================================================================
+
 class _MountainPainter extends CustomPainter {
   final Color color;
   final double offset;
@@ -2728,7 +2912,8 @@ class _MountainPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MountainPainter oldDelegate) => oldDelegate.offset != offset;
+  bool shouldRepaint(covariant _MountainPainter oldDelegate) =>
+      oldDelegate.offset != offset;
 }
 
 class _TreePainter extends CustomPainter {
@@ -2758,7 +2943,8 @@ class _TreePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _TreePainter oldDelegate) => oldDelegate.offset != offset;
+  bool shouldRepaint(covariant _TreePainter oldDelegate) =>
+      oldDelegate.offset != offset;
 }
 
 class _CloudPainter extends CustomPainter {
@@ -2789,5 +2975,6 @@ class _CloudPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _CloudPainter oldDelegate) => oldDelegate.offset != offset;
+  bool shouldRepaint(covariant _CloudPainter oldDelegate) =>
+      oldDelegate.offset != offset;
 }

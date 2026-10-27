@@ -1,7 +1,7 @@
 // lib/dialogs/tutorial_dialog.dart
 import 'package:flutter/material.dart';
 import '../models/sweet_world.dart';
-import '../widgets/theme_widgets.dart';   // CartoonButton, showCartoonDialog
+import '../widgets/theme_widgets.dart';
 
 class TutorialDialog extends StatefulWidget {
   final VoidCallback onDismiss;
@@ -18,7 +18,7 @@ class TutorialDialog extends StatefulWidget {
 class _TutorialDialogState extends State<TutorialDialog> {
   int _currentStep = 0;
 
-  // A dummy SweetWorld for the CartoonButton (tutorial is world‑agnostic)
+  // Dummy world for buttons (tutorial is world‑agnostic)
   final SweetWorld _tutorialWorld = const SweetWorld(
     name: 'Tutorial',
     emoji: '📚',
@@ -32,33 +32,22 @@ class _TutorialDialogState extends State<TutorialDialog> {
     obstacleKey: '',
     chocolateImagePath: '',
     obstacleEmojis: [],
-    unlockLevel: null,
+    unlockPrice: 0,   // was: unlockLevel: null
   );
 
   final List<Map<String, dynamic>> _steps = [
     {
       'icon': Icons.swipe,
       'title': 'Draw a Path',
-      'body': 'Drag across the grid to guide your dino to the next chocolate.\n\n'
-          'You can only move to adjacent cells (up, down, left, right).',
+      'body': 'Drag your finger across the grid to guide your dino to the next chocolate.\n\n'
+          'You can move up, down, left, or right – but only one step at a time.',
     },
     {
-      'icon': Icons.warning_amber_rounded,
-      'title': 'Watch Out for Obstacles',
-      'body': 'Mines, enemies and fire hazards will hurt your dino.\n\n'
-          'Avoid them by drawing a path that goes around them.',
-    },
-    {
-      'icon': Icons.auto_fix_high,
-      'title': 'Tap Assist',
-      'body': 'After a few mistakes, you can tap a chocolate to automatically\n'
-          'draw the shortest safe path to it.',
-    },
-    {
-      'icon': Icons.star_rounded,
-      'title': 'Earn Stars',
-      'body': 'Complete levels with fewer steps and more chances remaining\n'
-          'to earn up to 3 stars!',
+      'icon': Icons.auto_awesome,
+      'title': 'Collect & Avoid',
+      'body': 'Reach all chocolates to win!\n\n'
+          'Watch out for mines, enemies, and fire hazards – they cost you chances.\n'
+          'Tap a chocolate after a few mistakes to auto‑draw the safest route.',
     },
   ];
 
@@ -87,7 +76,7 @@ class _TutorialDialogState extends State<TutorialDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Step counter (dots)
+            // Step dots
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(_steps.length, (i) {
@@ -134,7 +123,7 @@ class _TutorialDialogState extends State<TutorialDialog> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            // Button(s)
+            // Buttons
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -154,7 +143,7 @@ class _TutorialDialogState extends State<TutorialDialog> {
                   const SizedBox.shrink(),
                 CartoonButton(
                   world: _tutorialWorld,
-                  label: isLast ? 'Start' : 'Next',
+                  label: isLast ? 'Start Playing' : 'Next',
                   primary: true,
                   icon: isLast ? Icons.play_arrow : Icons.arrow_forward,
                   onPressed: _nextStep,
